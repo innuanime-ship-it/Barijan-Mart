@@ -686,7 +686,7 @@ export default function App() {
             <form onSubmit={handleAuthSubmit} className="flex flex-col gap-2.5">
               {authMode === 'register' && <input type="text" placeholder="Full Name" value={authName} onChange={(e) => setAuthName(e.target.value)} className="w-full px-3 py-2 text-xs border rounded-xl" />}
               <input type="tel" placeholder="Mobile Number" value={authPhone} onChange={(e) => setAuthPhone(e.target.value)} className="w-full px-3 py-2 text-xs border rounded-xl" />
-              <input type="password" placeholder="Password (Admin: IN1511RNB2008)" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full px-3 py-2 text-xs border rounded-xl" />
+              <input type="password" placeholder="Password (Enter Password)" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} className="w-full px-3 py-2 text-xs border rounded-xl" />
               <button type="submit" className="w-full py-2.5 bg-fuchsia-600 text-white font-bold text-xs rounded-xl">{authMode === 'login' ? 'Login' : authMode === 'register' ? 'Register' : 'Update'}</button>
             </form>
             <div className="flex justify-between text-2xs text-slate-500 pt-1">
