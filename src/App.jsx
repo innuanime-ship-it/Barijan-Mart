@@ -4,7 +4,7 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Headphones
 } from 'lucide-react';
 
 const ALLOWED_VILLAGES = [
@@ -44,8 +44,9 @@ export default function App() {
     return JSON.parse(localStorage.getItem('bm_current_customer') || 'null');
   });
   const [authMode, setAuthMode] = useState(null);
-    const [regForm, setRegForm] = useState({
-    name: '', phone: '', password: '', village: '', avatar: ''
+    // Simplified Register Form (No Photo at Registration)
+  const [regForm, setRegForm] = useState({
+    name: '', phone: '', password: '', village: ''
   });
 
   const [loginForm, setLoginForm] = useState({
@@ -58,7 +59,7 @@ export default function App() {
 
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('bm_cart') || '[]'));
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem('bm_wishlist') || '[]'));
-  const [myOrders, setMyOrders] = useState(() => JSON.parse(localStorage.getItem('bm_orders') || '[]'));
+  const [myOrders, setMyOrders] = useState([]);
 
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState(null);
@@ -76,12 +77,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bm_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
-
+    // Fetch Realtime Catalog & User Orders from Supabase
   useEffect(() => {
-    localStorage.setItem('bm_orders', JSON.stringify(myOrders));
-  }, [myOrders]);
-    useEffect(() => {
     fetchCatalog();
+    if (currentUser?.phone) {
+      fetchUserOrders(currentUser.phone);
+    } else {
+      setMyOrders([]);
+    }
 
     const catalogChannel = supabase
       .channel('customer-catalog-realtime')
@@ -93,7 +96,7 @@ export default function App() {
     return () => {
       supabase.removeChannel(catalogChannel);
     };
-  }, []);
+  }, [currentUser]);
 
   const fetchCatalog = async () => {
     try {
@@ -111,7 +114,21 @@ export default function App() {
     }
   };
 
-  const handleAllowLocation = () => {
+  const fetchUserOrders = async (phone) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_phone', phone)
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setMyOrders(data);
+      }
+    } catch (err) {
+      console.error("Order fetch error:", err);
+    }
+  };
+    const handleAllowLocation = () => {
     if (!navigator.geolocation) {
       alert("Aapke phone me GPS support uplabdh nahi mila.");
       return;
@@ -137,35 +154,16 @@ export default function App() {
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   };
-    const handleAvatarUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (re) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 200;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 200, 200);
-        setRegForm(prev => ({ ...prev, avatar: canvas.toDataURL('image/jpeg', 0.7) }));
-      };
-      img.src = re.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
 
   const handleRegister = (e) => {
     e.preventDefault();
     const cleanPhone = (regForm.phone || '').trim().replace(/\D/g, '');
     
-    // Hidden Strict Validation
     if (!isValidIndianMobile(cleanPhone)) {
       return alert("Enter a valid 10-digit mobile number!");
     }
     if (!regForm.name.trim() || !regForm.password || !regForm.village) {
-      return alert("Kripya sabhi zaroori details bharein aur gaon select karein!");
+      return alert("Kripya sabhi details bharein aur gaon select karein!");
     }
 
     const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
@@ -179,7 +177,7 @@ export default function App() {
       phone: cleanPhone,
       password: regForm.password,
       village: regForm.village,
-      avatar: regForm.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+      avatar: null, // Initial photo empty
       registered_at: new Date().toISOString()
     };
 
@@ -190,7 +188,39 @@ export default function App() {
     setAuthMode(null);
     alert("Barijan Mart mein registration safal raha!");
   };
-    const handleLogin = (e) => {
+    // Set Profile Photo from Profile Tab
+  const handleProfilePhotoChange = (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 200, 200);
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+        
+        const updatedUser = { ...currentUser, avatar: compressedBase64 };
+        setCurrentUser(updatedUser);
+        localStorage.setItem('bm_current_customer', JSON.stringify(updatedUser));
+
+        const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+        const idx = allUsers.findIndex(u => u.phone === currentUser.phone);
+        if (idx !== -1) {
+          allUsers[idx].avatar = compressedBase64;
+          localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
+        }
+        alert("Profile photo update ho gayi!");
+      };
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLogin = (e) => {
     e.preventDefault();
     const cleanName = loginForm.name.trim().toUpperCase();
     const cleanPhone = (loginForm.phone || '').trim().replace(/\D/g, '');
@@ -247,6 +277,7 @@ export default function App() {
   const handleLogout = () => {
     setCurrentUser(null);
     localStorage.removeItem('bm_current_customer');
+    setMyOrders([]);
   };
     const toggleWishlist = (prod) => {
     if (!currentUser) {
@@ -411,34 +442,33 @@ export default function App() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
-      {/* Professional Brand Header */}
-      <header className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-4 sticky top-0 z-30 shadow-lg border-b border-emerald-700/30">
+    <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
+      {/* Premium Red Brand Header */}
+      <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             {currentUser?.avatar ? (
-              <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full border-2 border-emerald-400 shadow-sm object-cover" />
+              <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
             ) : (
-              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-xs text-slate-950 shadow">BM</div>
+              <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-xs text-white shadow">
+                {currentUser?.name ? currentUser.name.charAt(0) : <User size={16} />}
+              </div>
             )}
             <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
-                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded text-[9px] font-bold">PRO</span>
-              </div>
-              <p className="text-[10px] text-emerald-200/90 font-medium mt-0.5 truncate max-w-[170px]">
+              <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
+              <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[170px]">
                 {currentUser ? `📍 ${currentUser.village}` : "⚡ Direct Village Doorstep Delivery"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
-              <Heart size={17} className={wishlist.length > 0 ? "fill-rose-400 text-rose-400" : "text-white"} />
-              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
+              <Heart size={17} className={wishlist.length > 0 ? "fill-white text-white" : "text-white"} />
+              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
             </button>
             <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
               <ShoppingCart size={17} />
-              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
             </button>
           </div>
         </div>
@@ -451,23 +481,34 @@ export default function App() {
             placeholder="Search groceries, clothing, trending items..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/95 backdrop-blur rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-emerald-400 transition"
+            className="w-full pl-10 pr-4 py-2 bg-white rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-red-400 transition"
           />
         </div>
       </header>
+
+      {/* Customer Care Support Bar */}
+      <div className="bg-gradient-to-r from-red-800 to-rose-900 text-white px-4 py-1.5 flex items-center justify-between text-[11px] shadow-inner">
+        <div className="flex items-center gap-1.5 font-bold">
+          <PhoneCall size={13} className="text-yellow-300 animate-pulse" />
+          <span>Customer Care Support:</span>
+        </div>
+        <a href="tel:9204184716" className="bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-full font-black text-yellow-300 tracking-wider">
+          9204184716
+        </a>
+      </div>
             <main className="p-3.5 flex-1">
         {activeTab === 'home' && (
           <div>
             {/* Top Promo Bar */}
-            <div className="mb-3 p-2.5 bg-gradient-to-r from-emerald-800 to-teal-800 rounded-2xl text-white flex items-center justify-between shadow-sm">
+            <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-2">
-                <span className="p-1.5 bg-emerald-700/80 rounded-xl"><Truck size={14} className="text-emerald-200" /></span>
+                <span className="p-1.5 bg-white/20 rounded-xl"><Truck size={14} className="text-white" /></span>
                 <div>
-                  <p className="text-[11px] font-black leading-tight">15 Fixed Villages Delivery</p>
-                  <p className="text-[9px] text-emerald-200">Doorstep delivery with live GPS accuracy</p>
+                  <p className="text-[11px] font-black leading-tight">Fixed Villages Delivery</p>
+                  <p className="text-[9px] text-red-100">Doorstep delivery with live GPS accuracy</p>
                 </div>
               </div>
-              <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-lg">Free COD</span>
+              <span className="text-[10px] font-black bg-yellow-400 text-slate-900 px-2 py-0.5 rounded-lg shadow">Free COD</span>
             </div>
 
             {/* Category Filter Pills */}
@@ -477,7 +518,7 @@ export default function App() {
                   key={c}
                   onClick={() => setSelectedCategory(c)}
                   className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition shadow-sm ${
-                    selectedCategory === c ? 'bg-emerald-900 text-white shadow-emerald-900/20' : 'bg-white text-slate-700 border border-slate-200/80'
+                    selectedCategory === c ? 'bg-red-700 text-white shadow-red-700/20' : 'bg-white text-slate-700 border border-slate-200'
                   }`}
                 >
                   {c}
@@ -485,7 +526,7 @@ export default function App() {
               ))}
             </div>
 
-            {/* Professional Product Cards Feed */}
+            {/* Product Feed Grid */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               {loading ? (
                 <div className="col-span-2 text-center py-24 text-xs font-bold text-slate-400">Loading Barijan Mart Products...</div>
@@ -497,11 +538,11 @@ export default function App() {
                 filteredProducts.map(p => {
                   const discountPercent = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
                   return (
-                    <div key={p.id} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
+                    <div key={p.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
                       <div className="relative cursor-pointer overflow-hidden" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }}>
                         <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-cover bg-slate-100 group-hover:scale-105 transition duration-300" />
                         {discountPercent > 0 && (
-                          <span className="absolute top-2 left-2 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
+                          <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
                             {discountPercent}% OFF
                           </span>
                         )}
@@ -509,20 +550,20 @@ export default function App() {
                           onClick={(e) => { e.stopPropagation(); toggleWishlist(p); }} 
                           className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur rounded-full shadow-sm text-slate-600 active:scale-90 transition"
                         >
-                          <Heart size={14} className={wishlist.some(w => w.id === p.id) ? "fill-rose-500 text-rose-500" : ""} />
+                          <Heart size={14} className={wishlist.some(w => w.id === p.id) ? "fill-red-600 text-red-600" : ""} />
                         </button>
                       </div>
                       <div className="p-2.5 flex flex-col flex-1 justify-between">
                         <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }} className="cursor-pointer">
                           <h3 className="font-bold text-xs text-slate-900 truncate">{p.title}</h3>
                           <div className="flex items-baseline gap-1.5 mt-1">
-                            <span className="font-black text-sm text-emerald-800">₹{p.price}</span>
+                            <span className="font-black text-sm text-red-700">₹{p.price}</span>
                             {p.mrp > p.price && <span className="text-[10px] text-slate-400 line-through">₹{p.mrp}</span>}
                           </div>
                         </div>
                         <div className="flex gap-1.5 mt-2.5">
-                          <button onClick={() => handleAddToCart(p)} className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-black text-[11px] rounded-lg transition active:scale-95">Cart</button>
-                          <button onClick={() => handleInitiateBuyNow(p)} className="flex-1 py-1.5 bg-emerald-900 hover:bg-emerald-800 text-white font-black text-[11px] rounded-lg shadow-sm transition active:scale-95">Buy</button>
+                          <button onClick={() => handleAddToCart(p)} className="flex-1 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 font-black text-[11px] rounded-lg transition active:scale-95">Cart</button>
+                          <button onClick={() => handleInitiateBuyNow(p)} className="flex-1 py-1.5 bg-red-700 hover:bg-red-800 text-white font-black text-[11px] rounded-lg shadow-sm transition active:scale-95">Buy</button>
                         </div>
                       </div>
                     </div>
@@ -533,13 +574,14 @@ export default function App() {
           </div>
         )}
 
+        {/* Cart View */}
         {activeTab === 'cart' && (
           <div>
-            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-emerald-800" /> Aapka Cart ({cart.length})</h2>
+            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-red-700" /> Aapka Cart ({cart.length})</h2>
             {cart.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-3xl p-6 border border-slate-200">
                 <ShoppingCart size={40} className="mx-auto text-slate-300 mb-2" /><p className="text-xs font-bold text-slate-400">Aapka cart khaali hai</p>
-                <button onClick={() => setActiveTab('home')} className="mt-4 px-4 py-2 bg-emerald-900 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
+                <button onClick={() => setActiveTab('home')} className="mt-4 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -555,24 +597,25 @@ export default function App() {
                         <button onClick={() => updateCartQty(item.id, item.size, 1)} className="p-1 bg-slate-100 rounded-md"><Plus size={12} /></button>
                       </div>
                     </div>
-                    <button onClick={() => updateCartQty(item.id, item.size, -item.quantity)} className="text-rose-500 p-2"><Trash2 size={16} /></button>
+                    <button onClick={() => updateCartQty(item.id, item.size, -item.quantity)} className="text-red-500 p-2"><Trash2 size={16} /></button>
                   </div>
                 ))}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 mt-2 shadow-sm">
                   <div className="flex justify-between text-xs py-1 text-slate-600"><span>Product Total:</span><b className="text-slate-900">₹{totalProductAmount}</b></div>
-                  <div className="flex justify-between text-xs py-1 text-slate-600"><span>Advance Delivery Fee:</span><b className="text-emerald-800">₹{totalDeliveryFee}</b></div>
+                  <div className="flex justify-between text-xs py-1 text-slate-600"><span>Advance Delivery Fee:</span><b className="text-red-700">₹{totalDeliveryFee}</b></div>
                   <div className="border-t my-2"></div>
                   <div className="flex justify-between text-sm font-black text-slate-900"><span>Total Due (COD):</span><span>₹{totalProductAmount}</span></div>
-                  <button onClick={() => { setCheckoutProduct(null); setIsCheckoutOpen(true); }} className="w-full mt-4 py-3 bg-emerald-900 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition">Checkout ({cart.length} Items)</button>
+                  <button onClick={() => { setCheckoutProduct(null); setIsCheckoutOpen(true); }} className="w-full mt-4 py-3 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition">Checkout ({cart.length} Items)</button>
                 </div>
               </div>
             )}
           </div>
         )}
 
+        {/* Wishlist View */}
         {activeTab === 'wishlist' && (
           <div>
-            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-rose-500 fill-rose-500" /> Wishlist</h2>
+            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-red-600 fill-red-600" /> Wishlist</h2>
             {wishlist.length === 0 ? (
               <p className="text-center py-20 text-xs font-bold text-slate-400">Wishlist mein koi product nahi hai.</p>
             ) : (
@@ -581,57 +624,88 @@ export default function App() {
                   <div key={p.id} className="bg-white rounded-2xl border p-2.5 shadow-sm">
                     <img src={p.images?.[0]} className="w-full h-28 object-cover rounded-xl" />
                     <h4 className="font-bold text-xs truncate mt-2">{p.title}</h4>
-                    <p className="font-black text-xs text-emerald-800">₹{p.price}</p>
-                    <button onClick={() => handleAddToCart(p)} className="w-full mt-2 py-1.5 bg-emerald-50 text-emerald-800 font-extrabold text-[11px] rounded-lg">Move to Cart</button>
+                    <p className="font-black text-xs text-red-700">₹{p.price}</p>
+                    <button onClick={() => handleAddToCart(p)} className="w-full mt-2 py-1.5 bg-red-50 text-red-700 font-extrabold text-[11px] rounded-lg">Move to Cart</button>
                   </div>
                 ))}
               </div>
             )}
           </div>
         )}
-
+                      {/* Real Orders Display */}
         {activeTab === 'orders' && (
           <div>
-            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-emerald-800" /> Mere Orders</h2>
+            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-red-700" /> Mere Orders</h2>
             {!currentUser ? (
-              <div className="text-center py-20 bg-white rounded-3xl p-6 border"><p className="text-xs font-bold text-slate-400">Order dekhne ke liye pehle Login ya Register karein.</p></div>
-            ) : myOrders.length === 0 ? (
-              <div className="text-center py-20 bg-white rounded-3xl p-6 border"><p className="text-xs font-bold text-slate-400">Aapka koi purana order nahi hai.</p></div>
+              <div className="text-center py-20 bg-white rounded-3xl p-6 border"><p className="text-xs font-bold text-slate-400">Orders dekhne ke liye pehle Login ya Register karein.</p></div>
+            ) : myOrders.filter(o => o.id && o.customer_phone).length === 0 ? (
+              <div className="text-center py-20 bg-white rounded-3xl p-6 border border-slate-200">
+                <Package size={36} className="mx-auto text-slate-300 mb-2" />
+                <p className="text-xs font-bold text-slate-400">Aapka koi purana order nahi hai.</p>
+              </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {myOrders.map((o) => (
-                  <div key={o.id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
-                    <div className="flex justify-between items-start border-b pb-2">
-                      <div><span className="font-extrabold text-xs text-emerald-800">#{o.id}</span><p className="text-[10px] text-slate-400">{new Date(o.created_at).toLocaleDateString('en-IN')}</p></div>
-                      <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">{o.status}</span>
+                {myOrders.filter(o => o.id && o.customer_phone).map((o) => {
+                  const formattedDate = o.created_at ? new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recently Placed';
+                  return (
+                    <div key={o.id} className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+                      <div className="flex justify-between items-start border-b pb-2">
+                        <div>
+                          <span className="font-black text-xs text-red-700">#{o.id}</span>
+                          <p className="text-[10px] text-slate-400">{formattedDate}</p>
+                        </div>
+                        <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-red-100 text-red-700">{o.status || 'Order Placed'}</span>
+                      </div>
+                      <div className="py-2.5">
+                        {Array.isArray(o.items) && o.items.map((it, i) => (
+                          <div key={i} className="flex justify-between text-xs py-0.5"><span className="text-slate-800 font-medium">{it.title} ({it.size || 'Std'}) x {it.quantity || 1}</span><b>₹{it.price * (it.quantity || 1)}</b></div>
+                        ))}
+                      </div>
+                      <div className="border-t pt-2 flex justify-between text-[11px] text-slate-600">
+                        <span>COD Due: <b>₹{o.total_price || 0}</b></span>
+                        <span>Adv Paid: <b className="text-red-700">₹{o.delivery_fee_paid || 0}</b></span>
+                      </div>
                     </div>
-                    <div className="py-2.5">
-                      {o.items?.map((it, i) => (
-                        <div key={i} className="flex justify-between text-xs py-0.5"><span className="text-slate-800 font-medium">{it.title} ({it.size || 'Std'}) x {it.quantity || 1}</span><b>₹{it.price * (it.quantity || 1)}</b></div>
-                      ))}
-                    </div>
-                    <div className="border-t pt-2 flex justify-between text-[11px] text-slate-600"><span>COD Due: <b>₹{o.total_price}</b></span><span>Adv Paid: <b className="text-emerald-800">₹{o.delivery_fee_paid}</b></span></div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
+        {/* Profile Screen with Profile Photo Upload Option */}
         {activeTab === 'profile' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
-            <h2 className="text-sm font-black text-slate-900">Aapka Khata (Profile)</h2>
+            <h2 className="text-sm font-black text-slate-900">User Profile</h2>
             {currentUser ? (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-2xl border border-emerald-200">
-                  <img src={currentUser.avatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-emerald-500" />
+                <div className="flex items-center gap-3 p-3 bg-red-50 rounded-2xl border border-red-200">
+                  <div className="relative">
+                    {currentUser.avatar ? (
+                      <img src={currentUser.avatar} alt="Avatar" className="w-14 h-14 rounded-full object-cover border-2 border-red-500 shadow-sm" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-red-200 border-2 border-red-400 flex items-center justify-center font-black text-lg text-red-700">
+                        {currentUser.name.charAt(0)}
+                      </div>
+                    )}
+                    <label className="absolute bottom-0 right-0 bg-red-700 text-white p-1 rounded-full cursor-pointer shadow">
+                      <Camera size={11} />
+                      <input type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoChange} />
+                    </label>
+                  </div>
                   <div>
                     <p className="font-black text-sm text-slate-900">{currentUser.name}</p>
                     <p className="text-xs text-slate-600">📞 {currentUser.phone}</p>
-                    <p className="text-xs text-emerald-800 font-bold mt-0.5">🏡 {currentUser.village}</p>
+                    <p className="text-xs text-red-700 font-bold mt-0.5">🏡 {currentUser.village}</p>
                   </div>
                 </div>
-                <button onClick={handleLogout} className="w-full py-2.5 bg-rose-50 text-rose-600 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5">
+
+                <label className="text-center p-2.5 border border-dashed border-red-300 rounded-xl text-xs font-bold text-red-700 cursor-pointer bg-red-50/50">
+                  {currentUser.avatar ? "Change Profile Photo" : "+ Set Profile Photo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoChange} />
+                </label>
+
+                <button onClick={handleLogout} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
                   <LogOut size={14} /> Khata Logout Karein
                 </button>
               </div>
@@ -639,15 +713,16 @@ export default function App() {
               <div className="text-center py-6">
                 <p className="text-xs text-slate-500 mb-4">Fast delivery aur live tracking ke liye apna account kholein.</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setAuthMode('login')} className="flex-1 py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl">Login</button>
-                  <button onClick={() => setAuthMode('register')} className="flex-1 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">New Register</button>
+                  <button onClick={() => setAuthMode('login')} className="flex-1 py-2.5 bg-red-700 text-white font-bold text-xs rounded-xl shadow-md">Login</button>
+                  <button onClick={() => setAuthMode('register')} className="flex-1 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl shadow-md">New Register</button>
                 </div>
               </div>
             )}
           </div>
         )}
       </main>
-            {isCheckoutOpen && (
+            {/* Checkout Modal */}
+      {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3 mb-3">
@@ -659,7 +734,7 @@ export default function App() {
               <div className="text-center py-8">
                 <p className="text-xs text-slate-600 font-bold mb-4">Order place karne ke liye pehle Login ya Register karein!</p>
                 <div className="flex gap-2">
-                  <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('login'); }} className="flex-1 py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl">Login</button>
+                  <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('login'); }} className="flex-1 py-2.5 bg-red-700 text-white font-bold text-xs rounded-xl">Login</button>
                   <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('register'); }} className="flex-1 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">New Register</button>
                 </div>
               </div>
@@ -667,7 +742,7 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
                   <p className="font-bold text-slate-900">{currentUser.name}</p>
-                  <p className="text-slate-600 mt-0.5">🏡 Selected Village: <b className="text-emerald-800">{currentUser.village}</b></p>
+                  <p className="text-slate-600 mt-0.5">🏡 Selected Village: <b className="text-red-700">{currentUser.village}</b></p>
                   <p className="text-slate-500 mt-0.5">📞 Registered Mobile: <b className="text-slate-800">{currentUser.phone}</b> (Locked)</p>
                 </div>
 
@@ -689,20 +764,20 @@ export default function App() {
                       type="button"
                       onClick={handleAllowLocation}
                       disabled={locLoading}
-                      className="w-full py-3 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
+                      className="w-full py-3 bg-red-700 hover:bg-red-800 active:scale-95 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
                     >
                       <MapPin size={16} className={locLoading ? "animate-bounce" : ""} />
                       {locLoading ? "Detecting..." : "Allow Location"}
                     </button>
                   ) : (
-                    <div className="w-full py-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs rounded-xl text-center shadow-sm">
+                    <div className="w-full py-2.5 bg-red-50 border border-red-300 text-red-700 font-extrabold text-xs rounded-xl text-center shadow-sm">
                       ✓ Location Saved
                     </div>
                   )}
                 </div>
 
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
-                  <p className="text-[11px] font-bold text-slate-700">Advance Delivery Fee: <b className="text-emerald-800">₹{totalDeliveryFee}</b></p>
+                  <p className="text-[11px] font-bold text-slate-700">Advance Delivery Fee: <b className="text-red-700">₹{totalDeliveryFee}</b></p>
                   <p className="text-[10px] text-slate-500 mb-2">Scan QR & Pay via GPay / PhonePe / Paytm</p>
                   <img 
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=upi://pay?pa=${primaryUpiId}%26pn=BarijanMart%26am=${totalDeliveryFee}%26cu=INR`} 
@@ -714,7 +789,7 @@ export default function App() {
                     placeholder="Enter 12-digit UPI Reference / UTR No *" 
                     value={utrNumber} 
                     onChange={e => setUtrNumber(e.target.value)} 
-                    className="w-full mt-3 px-3 py-2 text-xs border border-emerald-400 bg-white rounded-xl text-center font-mono font-bold" 
+                    className="w-full mt-3 px-3 py-2 text-xs border border-red-400 bg-white rounded-xl text-center font-mono font-bold" 
                   />
                   <label className="block mt-2 text-[10px] text-slate-600 border border-dashed rounded-lg py-1.5 cursor-pointer bg-white">
                     {paymentScreenshot ? "✓ Slip Photo Selected" : "Upload Payment Slip (Optional)"}
@@ -725,7 +800,7 @@ export default function App() {
                 <button 
                   onClick={handleExecuteOrder} 
                   disabled={isSubmittingOrder} 
-                  className="w-full py-3.5 bg-emerald-900 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition"
+                  className="w-full py-3.5 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition"
                 >
                   {isSubmittingOrder ? "Confirming Order..." : "Confirm & Place Order"}
                 </button>
@@ -734,7 +809,9 @@ export default function App() {
           </div>
         </div>
       )}
-            {authMode === 'register' && (
+
+      {/* Simplified Registration Modal (Without Photo Upload) */}
+      {authMode === 'register' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleRegister} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-2.5">
             <h3 className="font-black text-sm text-slate-900">New Customer Registration</h3>
@@ -761,7 +838,7 @@ export default function App() {
               className="px-3 py-2 text-xs border rounded-xl" 
             />
             <div>
-              <label className="text-[10px] font-bold text-emerald-800 block mb-1">Select Village (Delivery In These 15 Villages Only):</label>
+              <label className="text-[10px] font-bold text-red-700 block mb-1">Select Village (Delivery In These 15 Villages Only):</label>
               <select 
                 value={regForm.village} 
                 onChange={e => setRegForm({ ...regForm, village: e.target.value })} 
@@ -773,19 +850,16 @@ export default function App() {
                 ))}
               </select>
             </div>
-            <label className="text-center p-2 border border-dashed rounded-xl text-[11px] text-slate-600 cursor-pointer bg-slate-50">
-              {regForm.avatar ? "✓ Profile Photo Added" : "+ Profile Photo / Avatar Set Karein"}
-              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
-            </label>
-            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md mt-1">Register Account</button>
+            <button type="submit" className="py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md mt-1">Register Account</button>
             <div className="flex justify-between items-center text-[11px] mt-1">
-              <span onClick={() => setAuthMode('login')} className="text-emerald-800 font-bold cursor-pointer">Login Screen</span>
+              <span onClick={() => setAuthMode('login')} className="text-red-700 font-bold cursor-pointer">Login Screen</span>
               <span onClick={() => setAuthMode(null)} className="text-slate-400 font-bold cursor-pointer">Cancel</span>
             </div>
           </form>
         </div>
       )}
 
+      {/* Login Modal */}
       {authMode === 'login' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleLogin} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
@@ -812,16 +886,17 @@ export default function App() {
               onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} 
               className="px-3 py-2 text-xs border rounded-xl" 
             />
-            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md">Login Karein</button>
+            <button type="submit" className="py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md">Login Karein</button>
             <div className="flex justify-between items-center text-[11px]">
-              <span onClick={() => setAuthMode('forgot')} className="text-rose-500 font-bold cursor-pointer">Forgot Password?</span>
-              <span onClick={() => setAuthMode('register')} className="text-emerald-800 font-bold cursor-pointer">New Register</span>
+              <span onClick={() => setAuthMode('forgot')} className="text-red-600 font-bold cursor-pointer">Forgot Password?</span>
+              <span onClick={() => setAuthMode('register')} className="text-slate-800 font-bold cursor-pointer">New Register</span>
             </div>
             <button type="button" onClick={() => setAuthMode(null)} className="text-xs text-slate-400 font-bold mt-1">Cancel</button>
           </form>
         </div>
       )}
 
+      {/* Strict Forgot Password Modal */}
       {authMode === 'forgot' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleForgotPassword} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-2.5">
@@ -866,15 +941,16 @@ export default function App() {
               onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} 
               className="px-3 py-2 text-xs border rounded-xl" 
             />
-            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md mt-1">Set New Password</button>
+            <button type="submit" className="py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md mt-1">Set New Password</button>
             <div className="flex justify-between items-center text-[11px] mt-1">
-              <span onClick={() => setAuthMode('login')} className="text-emerald-800 font-bold cursor-pointer">Login Screen</span>
+              <span onClick={() => setAuthMode('login')} className="text-red-700 font-bold cursor-pointer">Login Screen</span>
               <span onClick={() => setAuthMode(null)} className="text-slate-400 font-bold cursor-pointer">Cancel</span>
             </div>
           </form>
         </div>
       )}
 
+      {/* Product Quick-View Modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
           <div className="bg-white w-full max-w-sm rounded-3xl p-4 overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -886,55 +962,58 @@ export default function App() {
                 <div className="flex items-center gap-1.5 mt-2">
                   <span className="text-[11px] font-bold text-slate-700">Size:</span>
                   {selectedProduct.sizes.map((s) => (
-                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSize === s ? 'bg-emerald-900 text-white border-emerald-900' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
+                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSize === s ? 'bg-red-700 text-white border-red-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
                   ))}
                 </div>
               )}
               <div className="flex items-center gap-2 mt-2">
-                <span className="font-black text-base text-emerald-800">₹{selectedProduct.price}</span>
+                <span className="font-black text-base text-red-700">₹{selectedProduct.price}</span>
                 {selectedProduct.mrp > selectedProduct.price && <span className="text-xs text-slate-400 line-through">₹{selectedProduct.mrp}</span>}
               </div>
               <div className="flex gap-2 mt-4">
-                <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-50 text-emerald-800 font-extrabold text-xs rounded-xl">Add to Cart</button>
-                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-900 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
+                <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-50 text-red-700 font-extrabold text-xs rounded-xl">Add to Cart</button>
+                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* Bottom Sticky Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <ShoppingBag size={18} />
           <span className="text-[10px]">Home</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <Heart size={18} />
           <span className="text-[10px]">Wishlist</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <ShoppingCart size={18} />
-          {cart.length > 0 && <span className="absolute -top-1 right-2 bg-amber-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
+          {cart.length > 0 && <span className="absolute -top-1 right-2 bg-yellow-400 text-slate-900 text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
           <span className="text-[10px]">Cart</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <Package size={18} />
           <span className="text-[10px]">Orders</span>
         </button>
-        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <User size={18} />
           <span className="text-[10px]">Profile</span>
         </button>
       </nav>
     </div>
   );
-            }
+                    }
               
-                
-                    
-        
-  
-  
-  
       
+                
+      
+  
+                                              
+  
+  
+  
+  
   
