@@ -4,7 +4,7 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap
 } from 'lucide-react';
 
 const ALLOWED_VILLAGES = [
@@ -24,6 +24,12 @@ const ALLOWED_VILLAGES = [
   "Taalbari",
   "Kashibari"
 ];
+
+// Hidden Strict Mobile Validator: Exactly 10 digits starting with 6, 7, 8, or 9
+const isValidIndianMobile = (num) => {
+  const clean = (num || '').replace(/\D/g, '');
+  return /^[6-9]\d{9}$/.test(clean);
+};
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
@@ -152,18 +158,25 @@ export default function App() {
 
   const handleRegister = (e) => {
     e.preventDefault();
-    if (!regForm.name.trim() || !regForm.phone.trim() || !regForm.password || !regForm.village) {
-      return alert("Kripya sabhi fields bharein aur gaon select karein!");
+    const cleanPhone = (regForm.phone || '').trim().replace(/\D/g, '');
+    
+    // Hidden Strict Validation
+    if (!isValidIndianMobile(cleanPhone)) {
+      return alert("Enter a valid 10-digit mobile number!");
     }
+    if (!regForm.name.trim() || !regForm.password || !regForm.village) {
+      return alert("Kripya sabhi zaroori details bharein aur gaon select karein!");
+    }
+
     const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
-    const existing = allUsers.find(u => u.phone === regForm.phone.trim());
+    const existing = allUsers.find(u => u.phone === cleanPhone);
     if (existing) {
       return alert("Yeh mobile number pehle se registered hai! Kripya login karein.");
     }
 
     const newUser = {
       name: regForm.name.trim().toUpperCase(),
-      phone: regForm.phone.trim(),
+      phone: cleanPhone,
       password: regForm.password,
       village: regForm.village,
       avatar: regForm.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
@@ -175,14 +188,18 @@ export default function App() {
     localStorage.setItem('bm_current_customer', JSON.stringify(newUser));
     setCurrentUser(newUser);
     setAuthMode(null);
-    alert("Barijan Mart mein aapka registration safal raha!");
+    alert("Barijan Mart mein registration safal raha!");
   };
     const handleLogin = (e) => {
     e.preventDefault();
     const cleanName = loginForm.name.trim().toUpperCase();
-    const cleanPhone = loginForm.phone.trim();
-    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const cleanPhone = (loginForm.phone || '').trim().replace(/\D/g, '');
 
+    if (!isValidIndianMobile(cleanPhone)) {
+      return alert("Enter a valid 10-digit mobile number!");
+    }
+
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
     const user = allUsers.find(u => u.phone === cleanPhone && u.name === cleanName && u.password === loginForm.password);
     if (!user) {
       return alert("Registered Name, Mobile number ya Password galat hai!");
@@ -197,10 +214,13 @@ export default function App() {
   const handleForgotPassword = (e) => {
     e.preventDefault();
     const cleanName = forgotForm.name.trim().toUpperCase();
-    const cleanPhone = forgotForm.phone.trim();
+    const cleanPhone = (forgotForm.phone || '').trim().replace(/\D/g, '');
     const cleanVillage = forgotForm.village;
 
-    if (!cleanName || !cleanPhone || !cleanVillage || !forgotForm.newPassword || !forgotForm.confirmPassword) {
+    if (!isValidIndianMobile(cleanPhone)) {
+      return alert("Enter a valid 10-digit mobile number!");
+    }
+    if (!cleanName || !cleanVillage || !forgotForm.newPassword || !forgotForm.confirmPassword) {
       return alert("Sabhi details bharna anivarya hai!");
     }
     if (forgotForm.newPassword !== forgotForm.confirmPassword) {
@@ -215,7 +235,7 @@ export default function App() {
     );
 
     if (userIndex === -1) {
-      return alert("Di gayi details (Name, Phone aur Village) account se match nahi hui!");
+      return alert("Name, Phone aur Village account se match nahi hue!");
     }
 
     allUsers[userIndex].password = forgotForm.newPassword;
@@ -228,8 +248,7 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('bm_current_customer');
   };
-    // Gate: Registration Check Before Adding to Wishlist
-  const toggleWishlist = (prod) => {
+    const toggleWishlist = (prod) => {
     if (!currentUser) {
       setAuthMode('register');
       return;
@@ -241,7 +260,6 @@ export default function App() {
     });
   };
 
-  // Gate: Registration Check Before Adding to Cart
   const handleAddToCart = (prod, sizeToUse = null) => {
     if (!currentUser) {
       setAuthMode('register');
@@ -257,10 +275,9 @@ export default function App() {
       }
       return [...prev, { ...prod, size: finalSize, quantity: 1 }];
     });
-    alert("Item Cart mein shamil ho gaya!");
+    alert("Item Cart mein joda gaya!");
   };
 
-  // Gate: Registration Check Before Buying
   const handleInitiateBuyNow = (prod) => {
     if (!currentUser) {
       setAuthMode('register');
@@ -333,6 +350,9 @@ export default function App() {
     if (!utrNumber.trim()) {
       return alert("Kripya Advance Delivery Fee payment ka 12-digit UTR No enter karein!");
     }
+    if (altPhone.trim() && !isValidIndianMobile(altPhone.trim())) {
+      return alert("Alternative phone number galat hai! Kripya valid 10-digit number dein.");
+    }
 
     setIsSubmittingOrder(true);
     const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
@@ -392,54 +412,72 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
-      <header className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-4 sticky top-0 z-30 shadow-md">
+      {/* Professional Brand Header */}
+      <header className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-4 sticky top-0 z-30 shadow-lg border-b border-emerald-700/30">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5">
             {currentUser?.avatar ? (
-              <img src={currentUser.avatar} alt="Profile" className="w-8 h-8 rounded-full border-2 border-emerald-400 object-cover" />
+              <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full border-2 border-emerald-400 shadow-sm object-cover" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-xs text-white">BM</div>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-xs text-slate-950 shadow">BM</div>
             )}
             <div>
-              <h1 className="text-lg font-black tracking-tight leading-tight">Barijan Mart</h1>
-              <p className="text-[10px] text-emerald-200 font-medium">
-                {currentUser ? `📍 ${currentUser.village}` : "Barijan & Surrounding Areas"}
+              <div className="flex items-center gap-1.5">
+                <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-1.5 py-0.5 rounded text-[9px] font-bold">PRO</span>
+              </div>
+              <p className="text-[10px] text-emerald-200/90 font-medium mt-0.5 truncate max-w-[170px]">
+                {currentUser ? `📍 ${currentUser.village}` : "⚡ Direct Village Doorstep Delivery"}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
-              <Heart size={18} className={wishlist.length > 0 ? "fill-red-400 text-red-400" : "text-white"} />
-              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{wishlist.length}</span>}
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+              <Heart size={17} className={wishlist.length > 0 ? "fill-rose-400 text-rose-400" : "text-white"} />
+              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
             </button>
-            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
-              <ShoppingCart size={18} />
-              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+              <ShoppingCart size={17} />
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-950 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
             </button>
           </div>
         </div>
 
+        {/* Global Search Bar */}
         <div className="mt-3 relative">
-          <Search className="absolute left-3.5 top-2.5 text-slate-400" size={16} />
+          <Search className="absolute left-3.5 top-2.5 text-slate-400" size={15} />
           <input 
             type="text" 
-            placeholder="Search items, clothes, products..." 
+            placeholder="Search groceries, clothing, trending items..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-emerald-400"
+            className="w-full pl-10 pr-4 py-2 bg-white/95 backdrop-blur rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-emerald-400 transition"
           />
         </div>
       </header>
             <main className="p-3.5 flex-1">
         {activeTab === 'home' && (
           <div>
+            {/* Top Promo Bar */}
+            <div className="mb-3 p-2.5 bg-gradient-to-r from-emerald-800 to-teal-800 rounded-2xl text-white flex items-center justify-between shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-emerald-700/80 rounded-xl"><Truck size={14} className="text-emerald-200" /></span>
+                <div>
+                  <p className="text-[11px] font-black leading-tight">15 Fixed Villages Delivery</p>
+                  <p className="text-[9px] text-emerald-200">Doorstep delivery with live GPS accuracy</p>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold bg-white/20 px-2 py-1 rounded-lg">Free COD</span>
+            </div>
+
+            {/* Category Filter Pills */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
               {categories.map(c => (
                 <button
                   key={c}
                   onClick={() => setSelectedCategory(c)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
-                    selectedCategory === c ? 'bg-emerald-800 text-white shadow-sm' : 'bg-white text-slate-700 border border-slate-200'
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition shadow-sm ${
+                    selectedCategory === c ? 'bg-emerald-900 text-white shadow-emerald-900/20' : 'bg-white text-slate-700 border border-slate-200/80'
                   }`}
                 >
                   {c}
@@ -447,6 +485,7 @@ export default function App() {
               ))}
             </div>
 
+            {/* Professional Product Cards Feed */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               {loading ? (
                 <div className="col-span-2 text-center py-24 text-xs font-bold text-slate-400">Loading Barijan Mart Products...</div>
@@ -455,32 +494,40 @@ export default function App() {
                   Koi product uplabdh nahi hai.
                 </div>
               ) : (
-                filteredProducts.map(p => (
-                  <div key={p.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition">
-                    <div className="relative cursor-pointer" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }}>
-                      <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-cover bg-slate-100" />
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); toggleWishlist(p); }} 
-                        className="absolute top-2 right-2 p-1.5 bg-white/80 backdrop-blur rounded-full shadow-sm text-slate-600"
-                      >
-                        <Heart size={14} className={wishlist.some(w => w.id === p.id) ? "fill-red-500 text-red-500" : ""} />
-                      </button>
-                    </div>
-                    <div className="p-2.5 flex flex-col flex-1 justify-between">
-                      <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }} className="cursor-pointer">
-                        <h3 className="font-bold text-xs text-slate-900 truncate">{p.title}</h3>
-                        <div className="flex items-baseline gap-1.5 mt-1">
-                          <span className="font-black text-sm text-emerald-800">₹{p.price}</span>
-                          {p.mrp > p.price && <span className="text-[10px] text-slate-400 line-through">₹{p.mrp}</span>}
+                filteredProducts.map(p => {
+                  const discountPercent = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
+                  return (
+                    <div key={p.id} className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
+                      <div className="relative cursor-pointer overflow-hidden" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }}>
+                        <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-cover bg-slate-100 group-hover:scale-105 transition duration-300" />
+                        {discountPercent > 0 && (
+                          <span className="absolute top-2 left-2 bg-rose-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
+                            {discountPercent}% OFF
+                          </span>
+                        )}
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); toggleWishlist(p); }} 
+                          className="absolute top-2 right-2 p-1.5 bg-white/90 backdrop-blur rounded-full shadow-sm text-slate-600 active:scale-90 transition"
+                        >
+                          <Heart size={14} className={wishlist.some(w => w.id === p.id) ? "fill-rose-500 text-rose-500" : ""} />
+                        </button>
+                      </div>
+                      <div className="p-2.5 flex flex-col flex-1 justify-between">
+                        <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }} className="cursor-pointer">
+                          <h3 className="font-bold text-xs text-slate-900 truncate">{p.title}</h3>
+                          <div className="flex items-baseline gap-1.5 mt-1">
+                            <span className="font-black text-sm text-emerald-800">₹{p.price}</span>
+                            {p.mrp > p.price && <span className="text-[10px] text-slate-400 line-through">₹{p.mrp}</span>}
+                          </div>
+                        </div>
+                        <div className="flex gap-1.5 mt-2.5">
+                          <button onClick={() => handleAddToCart(p)} className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-black text-[11px] rounded-lg transition active:scale-95">Cart</button>
+                          <button onClick={() => handleInitiateBuyNow(p)} className="flex-1 py-1.5 bg-emerald-900 hover:bg-emerald-800 text-white font-black text-[11px] rounded-lg shadow-sm transition active:scale-95">Buy</button>
                         </div>
                       </div>
-                      <div className="flex gap-1.5 mt-2.5">
-                        <button onClick={() => handleAddToCart(p)} className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-[11px] rounded-lg transition">Cart</button>
-                        <button onClick={() => handleInitiateBuyNow(p)} className="flex-1 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-[11px] rounded-lg shadow-sm transition">Buy</button>
-                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -492,7 +539,7 @@ export default function App() {
             {cart.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-3xl p-6 border border-slate-200">
                 <ShoppingCart size={40} className="mx-auto text-slate-300 mb-2" /><p className="text-xs font-bold text-slate-400">Aapka cart khaali hai</p>
-                <button onClick={() => setActiveTab('home')} className="mt-4 px-4 py-2 bg-emerald-800 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
+                <button onClick={() => setActiveTab('home')} className="mt-4 px-4 py-2 bg-emerald-900 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -508,7 +555,7 @@ export default function App() {
                         <button onClick={() => updateCartQty(item.id, item.size, 1)} className="p-1 bg-slate-100 rounded-md"><Plus size={12} /></button>
                       </div>
                     </div>
-                    <button onClick={() => updateCartQty(item.id, item.size, -item.quantity)} className="text-red-500 p-2"><Trash2 size={16} /></button>
+                    <button onClick={() => updateCartQty(item.id, item.size, -item.quantity)} className="text-rose-500 p-2"><Trash2 size={16} /></button>
                   </div>
                 ))}
                 <div className="bg-white p-4 rounded-2xl border border-slate-200 mt-2 shadow-sm">
@@ -516,7 +563,7 @@ export default function App() {
                   <div className="flex justify-between text-xs py-1 text-slate-600"><span>Advance Delivery Fee:</span><b className="text-emerald-800">₹{totalDeliveryFee}</b></div>
                   <div className="border-t my-2"></div>
                   <div className="flex justify-between text-sm font-black text-slate-900"><span>Total Due (COD):</span><span>₹{totalProductAmount}</span></div>
-                  <button onClick={() => { setCheckoutProduct(null); setIsCheckoutOpen(true); }} className="w-full mt-4 py-3 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs rounded-xl shadow-lg transition">Checkout ({cart.length} Items)</button>
+                  <button onClick={() => { setCheckoutProduct(null); setIsCheckoutOpen(true); }} className="w-full mt-4 py-3 bg-emerald-900 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition">Checkout ({cart.length} Items)</button>
                 </div>
               </div>
             )}
@@ -525,7 +572,7 @@ export default function App() {
 
         {activeTab === 'wishlist' && (
           <div>
-            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-red-500 fill-red-500" /> Wishlist</h2>
+            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-rose-500 fill-rose-500" /> Wishlist</h2>
             {wishlist.length === 0 ? (
               <p className="text-center py-20 text-xs font-bold text-slate-400">Wishlist mein koi product nahi hai.</p>
             ) : (
@@ -584,7 +631,7 @@ export default function App() {
                     <p className="text-xs text-emerald-800 font-bold mt-0.5">🏡 {currentUser.village}</p>
                   </div>
                 </div>
-                <button onClick={handleLogout} className="w-full py-2.5 bg-red-50 text-red-600 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5">
+                <button onClick={handleLogout} className="w-full py-2.5 bg-rose-50 text-rose-600 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5">
                   <LogOut size={14} /> Khata Logout Karein
                 </button>
               </div>
@@ -592,7 +639,7 @@ export default function App() {
               <div className="text-center py-6">
                 <p className="text-xs text-slate-500 mb-4">Fast delivery aur live tracking ke liye apna account kholein.</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setAuthMode('login')} className="flex-1 py-2.5 bg-emerald-800 text-white font-bold text-xs rounded-xl">Login</button>
+                  <button onClick={() => setAuthMode('login')} className="flex-1 py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl">Login</button>
                   <button onClick={() => setAuthMode('register')} className="flex-1 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">New Register</button>
                 </div>
               </div>
@@ -612,7 +659,7 @@ export default function App() {
               <div className="text-center py-8">
                 <p className="text-xs text-slate-600 font-bold mb-4">Order place karne ke liye pehle Login ya Register karein!</p>
                 <div className="flex gap-2">
-                  <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('login'); }} className="flex-1 py-2.5 bg-emerald-800 text-white font-bold text-xs rounded-xl">Login</button>
+                  <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('login'); }} className="flex-1 py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl">Login</button>
                   <button onClick={() => { setIsCheckoutOpen(false); setAuthMode('register'); }} className="flex-1 py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl">New Register</button>
                 </div>
               </div>
@@ -628,9 +675,10 @@ export default function App() {
                   <label className="text-[11px] font-bold text-slate-600 block mb-1">Alternative Mobile Number (Optional):</label>
                   <input 
                     type="tel" 
-                    placeholder="Dusra Phone Number (Yadi koi ho)" 
+                    maxLength={10}
+                    placeholder="10-digit Dusra Phone Number" 
                     value={altPhone} 
-                    onChange={e => setAltPhone(e.target.value)} 
+                    onChange={e => setAltPhone(e.target.value.replace(/\D/g, ''))} 
                     className="w-full px-3 py-2 text-xs border rounded-xl" 
                   />
                 </div>
@@ -677,7 +725,7 @@ export default function App() {
                 <button 
                   onClick={handleExecuteOrder} 
                   disabled={isSubmittingOrder} 
-                  className="w-full py-3.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-xs rounded-xl shadow-lg transition"
+                  className="w-full py-3.5 bg-emerald-900 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-lg transition"
                 >
                   {isSubmittingOrder ? "Confirming Order..." : "Confirm & Place Order"}
                 </button>
@@ -699,10 +747,11 @@ export default function App() {
             />
             <input 
               type="tel" 
-              placeholder="Mobile Phone Number *" 
+              maxLength={10}
+              placeholder="10-Digit Mobile Number *" 
               value={regForm.phone} 
-              onChange={e => setRegForm({ ...regForm, phone: e.target.value })} 
-              className="px-3 py-2 text-xs border rounded-xl" 
+              onChange={e => setRegForm({ ...regForm, phone: e.target.value.replace(/\D/g, '') })} 
+              className="px-3 py-2 text-xs border rounded-xl font-mono" 
             />
             <input 
               type="password" 
@@ -728,7 +777,7 @@ export default function App() {
               {regForm.avatar ? "✓ Profile Photo Added" : "+ Profile Photo / Avatar Set Karein"}
               <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
             </label>
-            <button type="submit" className="py-2.5 bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md mt-1">Register Account</button>
+            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md mt-1">Register Account</button>
             <div className="flex justify-between items-center text-[11px] mt-1">
               <span onClick={() => setAuthMode('login')} className="text-emerald-800 font-bold cursor-pointer">Login Screen</span>
               <span onClick={() => setAuthMode(null)} className="text-slate-400 font-bold cursor-pointer">Cancel</span>
@@ -750,10 +799,11 @@ export default function App() {
             />
             <input 
               type="tel" 
-              placeholder="Registered Mobile Number *" 
+              maxLength={10}
+              placeholder="Registered 10-Digit Mobile *" 
               value={loginForm.phone} 
-              onChange={e => setLoginForm({ ...loginForm, phone: e.target.value })} 
-              className="px-3 py-2 text-xs border rounded-xl" 
+              onChange={e => setLoginForm({ ...loginForm, phone: e.target.value.replace(/\D/g, '') })} 
+              className="px-3 py-2 text-xs border rounded-xl font-mono" 
             />
             <input 
               type="password" 
@@ -762,9 +812,9 @@ export default function App() {
               onChange={e => setLoginForm({ ...loginForm, password: e.target.value })} 
               className="px-3 py-2 text-xs border rounded-xl" 
             />
-            <button type="submit" className="py-2.5 bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md">Login Karein</button>
+            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md">Login Karein</button>
             <div className="flex justify-between items-center text-[11px]">
-              <span onClick={() => setAuthMode('forgot')} className="text-red-500 font-bold cursor-pointer">Forgot Password?</span>
+              <span onClick={() => setAuthMode('forgot')} className="text-rose-500 font-bold cursor-pointer">Forgot Password?</span>
               <span onClick={() => setAuthMode('register')} className="text-emerald-800 font-bold cursor-pointer">New Register</span>
             </div>
             <button type="button" onClick={() => setAuthMode(null)} className="text-xs text-slate-400 font-bold mt-1">Cancel</button>
@@ -786,10 +836,11 @@ export default function App() {
             />
             <input 
               type="tel" 
-              placeholder="Registered Mobile Number *" 
+              maxLength={10}
+              placeholder="Registered 10-Digit Mobile *" 
               value={forgotForm.phone} 
-              onChange={e => setForgotForm({ ...forgotForm, phone: e.target.value })} 
-              className="px-3 py-2 text-xs border rounded-xl" 
+              onChange={e => setForgotForm({ ...forgotForm, phone: e.target.value.replace(/\D/g, '') })} 
+              className="px-3 py-2 text-xs border rounded-xl font-mono" 
             />
             <select 
               value={forgotForm.village} 
@@ -815,7 +866,7 @@ export default function App() {
               onChange={e => setForgotForm({ ...forgotForm, confirmPassword: e.target.value })} 
               className="px-3 py-2 text-xs border rounded-xl" 
             />
-            <button type="submit" className="py-2.5 bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md mt-1">Set New Password</button>
+            <button type="submit" className="py-2.5 bg-emerald-900 text-white font-bold text-xs rounded-xl shadow-md mt-1">Set New Password</button>
             <div className="flex justify-between items-center text-[11px] mt-1">
               <span onClick={() => setAuthMode('login')} className="text-emerald-800 font-bold cursor-pointer">Login Screen</span>
               <span onClick={() => setAuthMode(null)} className="text-slate-400 font-bold cursor-pointer">Cancel</span>
@@ -835,7 +886,7 @@ export default function App() {
                 <div className="flex items-center gap-1.5 mt-2">
                   <span className="text-[11px] font-bold text-slate-700">Size:</span>
                   {selectedProduct.sizes.map((s) => (
-                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSize === s ? 'bg-emerald-800 text-white border-emerald-800' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
+                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSize === s ? 'bg-emerald-900 text-white border-emerald-900' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
                   ))}
                 </div>
               )}
@@ -845,7 +896,7 @@ export default function App() {
               </div>
               <div className="flex gap-2 mt-4">
                 <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-50 text-emerald-800 font-extrabold text-xs rounded-xl">Add to Cart</button>
-                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
+                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-900 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
               </div>
             </div>
           </div>
@@ -853,38 +904,37 @@ export default function App() {
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
           <ShoppingBag size={18} />
           <span className="text-[10px]">Home</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
           <Heart size={18} />
           <span className="text-[10px]">Wishlist</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
           <ShoppingCart size={18} />
           {cart.length > 0 && <span className="absolute -top-1 right-2 bg-amber-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
           <span className="text-[10px]">Cart</span>
         </button>
-        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
           <Package size={18} />
           <span className="text-[10px]">Orders</span>
         </button>
-        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? 'text-emerald-900 font-bold' : 'text-slate-400'}`}>
           <User size={18} />
           <span className="text-[10px]">Profile</span>
         </button>
       </nav>
     </div>
   );
-              }
-            
-      
-                      
+            }
               
+                
+                    
         
-        
-        
-            
   
+  
+  
+      
   
