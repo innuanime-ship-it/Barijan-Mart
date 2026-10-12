@@ -99,7 +99,7 @@ export default function App() {
         setProducts(data);
       }
     } catch (err) {
-      console.error("Catalog fetch error:", err);
+      console.error("Fetch error:", err);
     } finally {
       setLoading(false);
     }
@@ -130,6 +130,52 @@ export default function App() {
       },
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
+  };
+    const handleAvatarUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 200, 200);
+        setRegForm(prev => ({ ...prev, avatar: canvas.toDataURL('image/jpeg', 0.7) }));
+      };
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRegister = (e) => {
+    e.preventDefault();
+    if (!regForm.name.trim() || !regForm.phone.trim() || !regForm.password || !regForm.village) {
+      return alert("Kripya sabhi fields bharein aur gaon select karein!");
+    }
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const existing = allUsers.find(u => u.phone === regForm.phone.trim());
+    if (existing) {
+      return alert("Yeh mobile number pehle se registered hai! Kripya login karein.");
+    }
+
+    const newUser = {
+      name: regForm.name.trim().toUpperCase(),
+      phone: regForm.phone.trim(),
+      password: regForm.password,
+      village: regForm.village,
+      avatar: regForm.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80',
+      registered_at: new Date().toISOString()
+    };
+
+    allUsers.push(newUser);
+    localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
+    localStorage.setItem('bm_current_customer', JSON.stringify(newUser));
+    setCurrentUser(newUser);
+    setAuthMode(null);
+    alert("Barijan Mart mein aapka registration safal raha!");
   };
     const handleLogin = (e) => {
     e.preventDefault();
@@ -182,7 +228,12 @@ export default function App() {
     setCurrentUser(null);
     localStorage.removeItem('bm_current_customer');
   };
-    const toggleWishlist = (prod) => {
+    // Gate: Registration Check Before Adding to Wishlist
+  const toggleWishlist = (prod) => {
+    if (!currentUser) {
+      setAuthMode('register');
+      return;
+    }
     setWishlist(prev => {
       const exists = prev.find(item => item.id === prod.id);
       if (exists) return prev.filter(item => item.id !== prod.id);
@@ -190,7 +241,12 @@ export default function App() {
     });
   };
 
+  // Gate: Registration Check Before Adding to Cart
   const handleAddToCart = (prod, sizeToUse = null) => {
+    if (!currentUser) {
+      setAuthMode('register');
+      return;
+    }
     const finalSize = sizeToUse || selectedSize || 'Standard';
     setCart(prev => {
       const idx = prev.findIndex(item => item.id === prod.id && item.size === finalSize);
@@ -202,6 +258,17 @@ export default function App() {
       return [...prev, { ...prod, size: finalSize, quantity: 1 }];
     });
     alert("Item Cart mein shamil ho gaya!");
+  };
+
+  // Gate: Registration Check Before Buying
+  const handleInitiateBuyNow = (prod) => {
+    if (!currentUser) {
+      setAuthMode('register');
+      return;
+    }
+    setCheckoutProduct(prod);
+    setSelectedSize(prod.sizes?.[0] || 'M');
+    setIsCheckoutOpen(true);
   };
 
   const updateCartQty = (id, size, change) => {
@@ -257,8 +324,8 @@ export default function App() {
   const primaryUpiId = getCheckoutItems()[0]?.upi_id || 'barijanmart@upi';
     const handleExecuteOrder = async () => {
     if (!currentUser) {
-      setAuthMode('login');
-      return alert("Pehle Login ya Register karein!");
+      setAuthMode('register');
+      return;
     }
     if (!customerLocation) {
       return alert("Kripya 'Allow Location' button dabakar location save karein!");
@@ -341,11 +408,11 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setActiveTab('wishlist')} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
               <Heart size={18} className={wishlist.length > 0 ? "fill-red-400 text-red-400" : "text-white"} />
               {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{wishlist.length}</span>}
             </button>
-            <button onClick={() => setActiveTab('cart')} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 rounded-full relative transition">
               <ShoppingCart size={18} />
               {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
             </button>
@@ -409,7 +476,7 @@ export default function App() {
                       </div>
                       <div className="flex gap-1.5 mt-2.5">
                         <button onClick={() => handleAddToCart(p)} className="flex-1 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-extrabold text-[11px] rounded-lg transition">Cart</button>
-                        <button onClick={() => { setCheckoutProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); setIsCheckoutOpen(true); }} className="flex-1 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-[11px] rounded-lg shadow-sm transition">Buy</button>
+                        <button onClick={() => handleInitiateBuyNow(p)} className="flex-1 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-[11px] rounded-lg shadow-sm transition">Buy</button>
                       </div>
                     </div>
                   </div>
@@ -479,7 +546,9 @@ export default function App() {
         {activeTab === 'orders' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-emerald-800" /> Mere Orders</h2>
-            {myOrders.length === 0 ? (
+            {!currentUser ? (
+              <div className="text-center py-20 bg-white rounded-3xl p-6 border"><p className="text-xs font-bold text-slate-400">Order dekhne ke liye pehle Login ya Register karein.</p></div>
+            ) : myOrders.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-3xl p-6 border"><p className="text-xs font-bold text-slate-400">Aapka koi purana order nahi hai.</p></div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -776,7 +845,7 @@ export default function App() {
               </div>
               <div className="flex gap-2 mt-4">
                 <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-50 text-emerald-800 font-extrabold text-xs rounded-xl">Add to Cart</button>
-                <button onClick={() => { setCheckoutProduct(selectedProduct); setSelectedProduct(null); setIsCheckoutOpen(true); }} className="flex-1 py-2.5 bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
+                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-emerald-800 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
               </div>
             </div>
           </div>
@@ -788,16 +857,16 @@ export default function App() {
           <ShoppingBag size={18} />
           <span className="text-[10px]">Home</span>
         </button>
-        <button onClick={() => setActiveTab('wishlist')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
           <Heart size={18} />
           <span className="text-[10px]">Wishlist</span>
         </button>
-        <button onClick={() => setActiveTab('cart')} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
           <ShoppingCart size={18} />
           {cart.length > 0 && <span className="absolute -top-1 right-2 bg-amber-500 text-white text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
           <span className="text-[10px]">Cart</span>
         </button>
-        <button onClick={() => setActiveTab('orders')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>
           <Package size={18} />
           <span className="text-[10px]">Orders</span>
         </button>
@@ -808,4 +877,14 @@ export default function App() {
       </nav>
     </div>
   );
-          }
+              }
+            
+      
+                      
+              
+        
+        
+        
+            
+  
+  
