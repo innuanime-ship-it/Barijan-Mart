@@ -4,7 +4,7 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Headphones
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3
 } from 'lucide-react';
 
 const ALLOWED_VILLAGES = [
@@ -25,7 +25,6 @@ const ALLOWED_VILLAGES = [
   "Kashibari"
 ];
 
-// Hidden Strict Mobile Validator: Exactly 10 digits starting with 6, 7, 8, or 9
 const isValidIndianMobile = (num) => {
   const clean = (num || '').replace(/\D/g, '');
   return /^[6-9]\d{9}$/.test(clean);
@@ -44,8 +43,7 @@ export default function App() {
     return JSON.parse(localStorage.getItem('bm_current_customer') || 'null');
   });
   const [authMode, setAuthMode] = useState(null);
-    // Simplified Register Form (No Photo at Registration)
-  const [regForm, setRegForm] = useState({
+    const [regForm, setRegForm] = useState({
     name: '', phone: '', password: '', village: ''
   });
 
@@ -56,6 +54,13 @@ export default function App() {
   const [forgotForm, setForgotForm] = useState({
     name: '', phone: '', village: '', newPassword: '', confirmPassword: ''
   });
+
+  // Profile Address Form State
+  const [profileAddress, setProfileAddress] = useState({
+    street: currentUser?.street || '',
+    landmark: currentUser?.landmark || ''
+  });
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
 
   const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('bm_cart') || '[]'));
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem('bm_wishlist') || '[]'));
@@ -77,8 +82,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bm_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
-    // Fetch Realtime Catalog & User Orders from Supabase
-  useEffect(() => {
+    useEffect(() => {
     fetchCatalog();
     if (currentUser?.phone) {
       fetchUserOrders(currentUser.phone);
@@ -106,6 +110,10 @@ export default function App() {
         .order('created_at', { ascending: false });
       if (!error && data) {
         setProducts(data);
+        // Rule: Admin dwara delete product customer ke cart aur wishlist se turant hatana
+        const validIds = new Set(data.map(p => p.id));
+        setCart(prev => prev.filter(item => validIds.has(item.id)));
+        setWishlist(prev => prev.filter(item => validIds.has(item.id)));
       }
     } catch (err) {
       console.error("Fetch error:", err);
@@ -177,7 +185,9 @@ export default function App() {
       phone: cleanPhone,
       password: regForm.password,
       village: regForm.village,
-      avatar: null, // Initial photo empty
+      street: '',
+      landmark: '',
+      avatar: null,
       registered_at: new Date().toISOString()
     };
 
@@ -185,10 +195,33 @@ export default function App() {
     localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
     localStorage.setItem('bm_current_customer', JSON.stringify(newUser));
     setCurrentUser(newUser);
+    setProfileAddress({ street: '', landmark: '' });
     setAuthMode(null);
     alert("Barijan Mart mein registration safal raha!");
   };
-    // Set Profile Photo from Profile Tab
+    const handleSaveProfileAddress = (e) => {
+    e.preventDefault();
+    if (!profileAddress.street.trim()) {
+      return alert("Ghar / Gali / Ward address bharna anivarya hai!");
+    }
+    const updated = {
+      ...currentUser,
+      street: profileAddress.street.trim(),
+      landmark: profileAddress.landmark.trim()
+    };
+    setCurrentUser(updated);
+    localStorage.setItem('bm_current_customer', JSON.stringify(updated));
+
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const idx = allUsers.findIndex(u => u.phone === currentUser.phone);
+    if (idx !== -1) {
+      allUsers[idx] = updated;
+      localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
+    }
+    setIsEditingAddress(false);
+    alert("Delivery Address safalta se save ho gaya!");
+  };
+
   const handleProfilePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file || !currentUser) return;
@@ -237,6 +270,7 @@ export default function App() {
 
     localStorage.setItem('bm_current_customer', JSON.stringify(user));
     setCurrentUser(user);
+    setProfileAddress({ street: user.street || '', landmark: user.landmark || '' });
     setAuthMode(null);
     alert(`Welcome back, ${user.name}!`);
   };
@@ -389,7 +423,8 @@ export default function App() {
     const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
     const orderItems = getCheckoutItems();
 
-    const fullDeliveryAddress = `Village: ${currentUser.village}, Registered No: ${currentUser.phone}${altPhone.trim() ? `, Alt No: ` + altPhone.trim() : ''}`;
+    // Complete Non-Editable Address Built from Profile
+    const fullDeliveryAddress = `Village: ${currentUser.village}, Street/Ward: ${currentUser.street || 'Not Specified'}${currentUser.landmark ? `, Landmark: ` + currentUser.landmark : ''}, Phone: ${currentUser.phone}${altPhone.trim() ? `, Alt Phone: ` + altPhone.trim() : ''}`;
 
     const orderPayload = {
       id: newOrderId,
@@ -443,7 +478,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
-      {/* Premium Red Brand Header */}
       <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -473,7 +507,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Search Bar */}
         <div className="mt-3 relative">
           <Search className="absolute left-3.5 top-2.5 text-slate-400" size={15} />
           <input 
@@ -486,7 +519,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Customer Care Support Bar */}
       <div className="bg-gradient-to-r from-red-800 to-rose-900 text-white px-4 py-1.5 flex items-center justify-between text-[11px] shadow-inner">
         <div className="flex items-center gap-1.5 font-bold">
           <PhoneCall size={13} className="text-yellow-300 animate-pulse" />
@@ -499,7 +531,6 @@ export default function App() {
             <main className="p-3.5 flex-1">
         {activeTab === 'home' && (
           <div>
-            {/* Top Promo Bar */}
             <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-2">
                 <span className="p-1.5 bg-white/20 rounded-xl"><Truck size={14} className="text-white" /></span>
@@ -511,7 +542,6 @@ export default function App() {
               <span className="text-[10px] font-black bg-yellow-400 text-slate-900 px-2 py-0.5 rounded-lg shadow">Free COD</span>
             </div>
 
-            {/* Category Filter Pills */}
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
               {categories.map(c => (
                 <button
@@ -526,7 +556,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* Product Feed Grid */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               {loading ? (
                 <div className="col-span-2 text-center py-24 text-xs font-bold text-slate-400">Loading Barijan Mart Products...</div>
@@ -574,7 +603,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Cart View */}
         {activeTab === 'cart' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-red-700" /> Aapka Cart ({cart.length})</h2>
@@ -612,7 +640,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Wishlist View */}
         {activeTab === 'wishlist' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-red-600 fill-red-600" /> Wishlist</h2>
@@ -632,7 +659,7 @@ export default function App() {
             )}
           </div>
         )}
-                      {/* Real Orders Display */}
+                      {/* Real Orders Display with Product Photos & Details */}
         {activeTab === 'orders' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-red-700" /> Mere Orders</h2>
@@ -656,11 +683,21 @@ export default function App() {
                         </div>
                         <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-red-100 text-red-700">{o.status || 'Order Placed'}</span>
                       </div>
-                      <div className="py-2.5">
+                      
+                      {/* Detailed Ordered Products with Photos */}
+                      <div className="py-2.5 flex flex-col gap-2">
                         {Array.isArray(o.items) && o.items.map((it, i) => (
-                          <div key={i} className="flex justify-between text-xs py-0.5"><span className="text-slate-800 font-medium">{it.title} ({it.size || 'Std'}) x {it.quantity || 1}</span><b>₹{it.price * (it.quantity || 1)}</b></div>
+                          <div key={i} className="flex items-center gap-2.5 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                            <img src={it.images?.[0] || 'https://via.placeholder.com/80'} alt={it.title} className="w-12 h-12 rounded-lg object-cover bg-white" />
+                            <div className="flex-1 min-w-0">
+                              <h5 className="font-bold text-xs text-slate-900 truncate">{it.title}</h5>
+                              <p className="text-[10px] text-slate-500">Size: {it.size || 'Std'} | Qty: {it.quantity || 1}</p>
+                            </div>
+                            <span className="font-black text-xs text-slate-900">₹{it.price * (it.quantity || 1)}</span>
+                          </div>
                         ))}
                       </div>
+
                       <div className="border-t pt-2 flex justify-between text-[11px] text-slate-600">
                         <span>COD Due: <b>₹{o.total_price || 0}</b></span>
                         <span>Adv Paid: <b className="text-red-700">₹{o.delivery_fee_paid || 0}</b></span>
@@ -673,7 +710,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Profile Screen with Profile Photo Upload Option */}
+        {/* Profile Screen with Address Edit & Photo Change */}
         {activeTab === 'profile' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
             <h2 className="text-sm font-black text-slate-900">User Profile</h2>
@@ -705,6 +742,42 @@ export default function App() {
                   <input type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoChange} />
                 </label>
 
+                {/* Profile Address Edit Section */}
+                <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-black text-xs text-slate-900 flex items-center gap-1.5"><MapPin size={13} className="text-red-700" /> Saved Delivery Address</span>
+                    <button onClick={() => setIsEditingAddress(!isEditingAddress)} className="text-red-700 font-bold text-[11px] flex items-center gap-1">
+                      <Edit3 size={12} /> {isEditingAddress ? 'Cancel' : 'Edit'}
+                    </button>
+                  </div>
+
+                  {isEditingAddress ? (
+                    <form onSubmit={handleSaveProfileAddress} className="flex flex-col gap-2 mt-2">
+                      <input 
+                        type="text" 
+                        placeholder="House No, Ward, Street, Mohalla *" 
+                        value={profileAddress.street} 
+                        onChange={e => setProfileAddress({ ...profileAddress, street: e.target.value })} 
+                        className="w-full px-3 py-2 text-xs border rounded-xl bg-white" 
+                      />
+                      <input 
+                        type="text" 
+                        placeholder="Nearby Landmark (e.g. Near Mosque/School)" 
+                        value={profileAddress.landmark} 
+                        onChange={e => setProfileAddress({ ...profileAddress, landmark: e.target.value })} 
+                        className="w-full px-3 py-2 text-xs border rounded-xl bg-white" 
+                      />
+                      <button type="submit" className="py-2 bg-red-700 text-white font-bold text-xs rounded-xl shadow-sm">Save Address</button>
+                    </form>
+                  ) : (
+                    <div className="text-xs text-slate-600 leading-relaxed">
+                      <p><b>Village:</b> {currentUser.village}</p>
+                      <p><b>Street / House:</b> {currentUser.street || 'Address add nahi kiya gaya'}</p>
+                      {currentUser.landmark && <p><b>Landmark:</b> {currentUser.landmark}</p>}
+                    </div>
+                  )}
+                </div>
+
                 <button onClick={handleLogout} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition">
                   <LogOut size={14} /> Khata Logout Karein
                 </button>
@@ -721,7 +794,7 @@ export default function App() {
           </div>
         )}
       </main>
-            {/* Checkout Modal */}
+            {/* Checkout Modal (Non-Editable Profile Address + 1-Click Location) */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -740,10 +813,16 @@ export default function App() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
+                {/* Single Non-Editable Address Box */}
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
-                  <p className="font-bold text-slate-900">{currentUser.name}</p>
-                  <p className="text-slate-600 mt-0.5">🏡 Selected Village: <b className="text-red-700">{currentUser.village}</b></p>
-                  <p className="text-slate-500 mt-0.5">📞 Registered Mobile: <b className="text-slate-800">{currentUser.phone}</b> (Locked)</p>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-black text-slate-900">Delivery Address (Locked):</span>
+                    <button onClick={() => { setIsCheckoutOpen(false); setActiveTab('profile'); }} className="text-red-700 text-[10px] font-bold underline">Edit in Profile</button>
+                  </div>
+                  <p className="text-slate-800 font-medium"><b>Name:</b> {currentUser.name}</p>
+                  <p className="text-slate-800 font-medium"><b>Village:</b> {currentUser.village}</p>
+                  <p className="text-slate-700 font-medium"><b>Address:</b> {currentUser.street ? `${currentUser.street}${currentUser.landmark ? ', ' + currentUser.landmark : ''}` : 'Address profile mein jodein'}</p>
+                  <p className="text-slate-500 mt-1">📞 Registered Mobile: <b className="text-slate-800">{currentUser.phone}</b></p>
                 </div>
 
                 <div>
@@ -751,7 +830,7 @@ export default function App() {
                   <input 
                     type="tel" 
                     maxLength={10}
-                    placeholder="10-digit Dusra Phone Number" 
+                    placeholder="10-digit Alternative Mobile" 
                     value={altPhone} 
                     onChange={e => setAltPhone(e.target.value.replace(/\D/g, ''))} 
                     className="w-full px-3 py-2 text-xs border rounded-xl" 
@@ -810,7 +889,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Simplified Registration Modal (Without Photo Upload) */}
+      {/* Auth Modals */}
       {authMode === 'register' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleRegister} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-2.5">
@@ -859,7 +938,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Login Modal */}
       {authMode === 'login' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleLogin} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
@@ -896,7 +974,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Strict Forgot Password Modal */}
       {authMode === 'forgot' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleForgotPassword} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-2.5">
@@ -950,26 +1027,34 @@ export default function App() {
         </div>
       )}
 
-      {/* Product Quick-View Modal */}
+      {/* Complete Product Details Quick View Modal */}
       {selectedProduct && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl p-4 overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-            <img src={selectedProduct.images?.[0]} className="w-full h-56 object-cover rounded-2xl" />
+          <div className="bg-white w-full max-w-sm rounded-3xl p-4 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <img src={selectedProduct.images?.[0]} className="w-full h-60 object-cover rounded-2xl bg-slate-100" />
             <div className="mt-3">
-              <h3 className="font-bold text-sm text-slate-900">{selectedProduct.title}</h3>
-              <p className="text-xs text-slate-500 mt-1">{selectedProduct.description}</p>
+              <h3 className="font-black text-sm text-slate-900 leading-snug">{selectedProduct.title}</h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">{selectedProduct.description}</p>
+              
               {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex items-center gap-1.5 mt-3">
                   <span className="text-[11px] font-bold text-slate-700">Size:</span>
                   {selectedProduct.sizes.map((s) => (
-                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2 py-0.5 rounded text-[10px] font-bold border ${selectedSize === s ? 'bg-red-700 text-white border-red-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
+                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${selectedSize === s ? 'bg-red-700 text-white border-red-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
                   ))}
                 </div>
               )}
-              <div className="flex items-center gap-2 mt-2">
-                <span className="font-black text-base text-red-700">₹{selectedProduct.price}</span>
+
+              <div className="flex items-baseline gap-2 mt-3">
+                <span className="font-black text-lg text-red-700">₹{selectedProduct.price}</span>
                 {selectedProduct.mrp > selectedProduct.price && <span className="text-xs text-slate-400 line-through">₹{selectedProduct.mrp}</span>}
               </div>
+
+              <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1">
+                <ShieldCheck size={13} className="text-emerald-600" />
+                <span>{selectedProduct.return_policy || '7 Days Replacement Policy'}</span>
+              </div>
+
               <div className="flex gap-2 mt-4">
                 <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-50 text-red-700 font-extrabold text-xs rounded-xl">Add to Cart</button>
                 <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
@@ -1005,14 +1090,13 @@ export default function App() {
       </nav>
     </div>
   );
-                    }
+                  }
+                
+                          
               
       
-                
+  
       
-  
-                                              
-  
   
   
   
