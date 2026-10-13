@@ -4,7 +4,7 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3, ExternalLink, Image as ImageIcon
 } from 'lucide-react';
 
 const ALLOWED_VILLAGES = [
@@ -31,7 +31,7 @@ const isValidIndianMobile = (num) => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'product-detail' | 'cart' | 'wishlist' | 'orders' | 'profile'
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,7 +55,6 @@ export default function App() {
     name: '', phone: '', village: '', newPassword: '', confirmPassword: ''
   });
 
-  // Profile Address Form State
   const [profileAddress, setProfileAddress] = useState({
     street: currentUser?.street || '',
     landmark: currentUser?.landmark || ''
@@ -110,7 +109,6 @@ export default function App() {
         .order('created_at', { ascending: false });
       if (!error && data) {
         setProducts(data);
-        // Rule: Admin dwara delete product customer ke cart aur wishlist se turant hatana
         const validIds = new Set(data.map(p => p.id));
         setCart(prev => prev.filter(item => validIds.has(item.id)));
         setWishlist(prev => prev.filter(item => validIds.has(item.id)));
@@ -401,9 +399,16 @@ export default function App() {
     return cart;
   };
 
-  const totalProductAmount = getCheckoutItems().reduce((acc, it) => acc + (it.price * (it.quantity || 1)), 0);
-  const totalDeliveryFee = getCheckoutItems().reduce((acc, it) => acc + (it.delivery_fee || 49), 0);
+  const totalProductAmount = getCheckoutItems().reduce((acc, it) => acc + (Number(it.price) * (it.quantity || 1)), 0);
+  
+  // Exact Delivery Fee: Admin defined value respected (0, 20, etc.)
+  const totalDeliveryFee = getCheckoutItems().reduce((acc, it) => {
+    const fee = (it.delivery_fee !== undefined && it.delivery_fee !== null && it.delivery_fee !== '') ? Number(it.delivery_fee) : 0;
+    return acc + fee;
+  }, 0);
+
   const primaryUpiId = getCheckoutItems()[0]?.upi_id || 'barijanmart@upi';
+  const upiPayUrl = `upi://pay?pa=${primaryUpiId}&pn=BarijanMart&am=${totalDeliveryFee}&cu=INR`;
     const handleExecuteOrder = async () => {
     if (!currentUser) {
       setAuthMode('register');
@@ -412,8 +417,9 @@ export default function App() {
     if (!customerLocation) {
       return alert("Kripya 'Allow Location' button dabakar location save karein!");
     }
-    if (!utrNumber.trim()) {
-      return alert("Kripya Advance Delivery Fee payment ka 12-digit UTR No enter karein!");
+    // Screenshot Compulsory when advance delivery fee > 0
+    if (totalDeliveryFee > 0 && !paymentScreenshot) {
+      return alert("Advance Delivery Fee ka payment screenshot upload karna zaroori hai!");
     }
     if (altPhone.trim() && !isValidIndianMobile(altPhone.trim())) {
       return alert("Alternative phone number galat hai! Kripya valid 10-digit number dein.");
@@ -423,7 +429,6 @@ export default function App() {
     const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
     const orderItems = getCheckoutItems();
 
-    // Complete Non-Editable Address Built from Profile
     const fullDeliveryAddress = `Village: ${currentUser.village}, Street/Ward: ${currentUser.street || 'Not Specified'}${currentUser.landmark ? `, Landmark: ` + currentUser.landmark : ''}, Phone: ${currentUser.phone}${altPhone.trim() ? `, Alt Phone: ` + altPhone.trim() : ''}`;
 
     const orderPayload = {
@@ -437,7 +442,131 @@ export default function App() {
       items: orderItems,
       total_price: totalProductAmount,
       delivery_fee_paid: totalDeliveryFee,
-      utr: utrNumber.trim(),
+      utr: utrNumber.trim() || null,
+      screenshot: paymentScreenshot || null,
+      location: customerLocation,
+      status: 'Order Placed',
+      estimated_delivery: '2-4 Days'
+    };
+
+    try {
+      const { error } = await supabase.from('orders').insert([orderPayload]);
+      if (error) {
+        alert("Order error: " + error.message);
+      } else {
+        const record = { ...orderPayload, created_at: new Date().toISOString() };
+        setMyOrders(prev => [record, ...prev]);
+        if (!checkoutProduct) setCart([]);
+        setCheckoutProduct(null);
+        setIsCheckoutOpen(false);
+        setUtrNumber('');
+        setPaymentScreenshot(null);
+        setCustomerLocation(null);
+        setAltPhone('');
+        setActiveTab('orders');
+        alert("Aapka Barijan Mart order safalta se book ho gaya!");
+      }
+    } catch (e) {
+      alert("Network Error: " + e.message);
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const categories = ['All', 'Fashion', 'Footwear', 'Groceries', 'Beauty', 'Electronics'];
+  const filteredProducts = products.filter(p => {
+    const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
+    const matchSearch = p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                        p.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
+      <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            {currentUser?.avatar ? (
+              <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-xs text-white shadow">
+                {currentUser?.name ? currentUser.name.charAt(0) : <User size={16} />}
+              </div>
+            )}
+            <div>
+              <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
+              <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[170px]">
+                {currentUser ? `📍 ${currentUser.village}` : "⚡ Direct Village Doorstep Delivery"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+              <Heart size={17} className={wishlist.length > 0 ? "fill-white text-white" : "text-white"} />
+              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
+            </button>
+            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+              <ShoppingCart size={17} />
+              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 relative">
+          <Search className="absolute left-3.5 top-2.5 text-slate-400" size={15} />
+          <input 
+            type="text" 
+            placeholder="Search groceries, clothing, trending items..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-white rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-red-400 transition"
+          />
+        </div>
+      </header>
+
+      <div className="bg-gradient-to-r from-red-800 to-rose-900 text-white px-4 py-1.5 flex items-center justify-between text-[11px] shadow-inner">
+        <div className="flex items-center gap-1.5 font-bold">
+          <PhoneCall size={13} className="text-yellow-300 animate-pulse" />
+          <span>Customer Care Support:</span>
+        </div>
+        <a href="tel:9204184716" className="bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-full font-black text-yellow-300 tracking-wider">
+          9204184716
+        </a>
+      </div>
+        const handleExecuteOrder = async () => {
+    if (!currentUser) {
+      setAuthMode('register');
+      return;
+    }
+    if (!customerLocation) {
+      return alert("Kripya 'Allow Location' button dabakar location save karein!");
+    }
+    // Screenshot Compulsory when advance delivery fee > 0
+    if (totalDeliveryFee > 0 && !paymentScreenshot) {
+      return alert("Advance Delivery Fee ka payment screenshot upload karna zaroori hai!");
+    }
+    if (altPhone.trim() && !isValidIndianMobile(altPhone.trim())) {
+      return alert("Alternative phone number galat hai! Kripya valid 10-digit number dein.");
+    }
+
+    setIsSubmittingOrder(true);
+    const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
+    const orderItems = getCheckoutItems();
+
+    const fullDeliveryAddress = `Village: ${currentUser.village}, Street/Ward: ${currentUser.street || 'Not Specified'}${currentUser.landmark ? `, Landmark: ` + currentUser.landmark : ''}, Phone: ${currentUser.phone}${altPhone.trim() ? `, Alt Phone: ` + altPhone.trim() : ''}`;
+
+    const orderPayload = {
+      id: newOrderId,
+      customer_name: currentUser.name,
+      customer_phone: currentUser.phone,
+      alt_phone: altPhone.trim() || null,
+      village: currentUser.village,
+      avatar: currentUser.avatar || null,
+      full_address: fullDeliveryAddress,
+      items: orderItems,
+      total_price: totalProductAmount,
+      delivery_fee_paid: totalDeliveryFee,
+      utr: utrNumber.trim() || null,
       screenshot: paymentScreenshot || null,
       location: customerLocation,
       status: 'Order Placed',
@@ -529,6 +658,78 @@ export default function App() {
         </a>
       </div>
             <main className="p-3.5 flex-1">
+        {/* Full-Screen Product Detail Page */}
+        {activeTab === 'product-detail' && selectedProduct && (
+          <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
+            <button 
+              onClick={() => setActiveTab('home')} 
+              className="mb-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1"
+            >
+              <ArrowLeft size={14} /> Back to Products
+            </button>
+
+            {/* Natural Aspect Ratio Photo Box (1:1, 3:4 etc. without cropping) */}
+            <div className="w-full bg-slate-100 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200">
+              <img 
+                src={selectedProduct.images?.[0] || 'https://via.placeholder.com/300'} 
+                alt={selectedProduct.title} 
+                className="w-full max-h-[480px] object-contain rounded-2xl" 
+              />
+            </div>
+
+            <div className="mt-4">
+              <h2 className="font-black text-lg text-slate-900 leading-snug">{selectedProduct.title}</h2>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed whitespace-pre-line">{selectedProduct.description}</p>
+
+              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                <div className="flex items-center gap-2 mt-4">
+                  <span className="text-xs font-bold text-slate-800">Size:</span>
+                  {selectedProduct.sizes.map((s) => (
+                    <button 
+                      key={s} 
+                      onClick={() => setSelectedSize(s)} 
+                      className={`px-3 py-1 rounded-xl text-xs font-bold border transition ${
+                        selectedSize === s ? 'bg-red-700 text-white border-red-700 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-baseline gap-2.5 mt-4">
+                <span className="font-black text-2xl text-red-700">₹{selectedProduct.price}</span>
+                {selectedProduct.mrp > selectedProduct.price && <span className="text-sm text-slate-400 line-through">₹{selectedProduct.mrp}</span>}
+                <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md">
+                  Delivery: {selectedProduct.delivery_fee > 0 ? `₹${selectedProduct.delivery_fee}` : 'Free'}
+                </span>
+              </div>
+
+              <div className="mt-3 text-xs text-slate-500 flex items-center gap-1.5">
+                <ShieldCheck size={15} className="text-emerald-600" />
+                <span>{selectedProduct.return_policy || '7 Days Replacement Policy'}</span>
+              </div>
+
+              <div className="flex gap-2.5 mt-6">
+                <button 
+                  onClick={() => handleAddToCart(selectedProduct, selectedSize)} 
+                  className="flex-1 py-3 bg-red-50 hover:bg-red-100 text-red-700 font-black text-xs rounded-xl active:scale-95 transition"
+                >
+                  Add to Cart
+                </button>
+                <button 
+                  onClick={() => handleInitiateBuyNow(selectedProduct)} 
+                  className="flex-1 py-3 bg-red-700 hover:bg-red-800 text-white font-black text-xs rounded-xl shadow-lg active:scale-95 transition"
+                >
+                  Buy Now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Regular Home Product Feed */}
         {activeTab === 'home' && (
           <div>
             <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
@@ -568,8 +769,8 @@ export default function App() {
                   const discountPercent = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
                   return (
                     <div key={p.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
-                      <div className="relative cursor-pointer overflow-hidden" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }}>
-                        <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-cover bg-slate-100 group-hover:scale-105 transition duration-300" />
+                      <div className="relative cursor-pointer overflow-hidden bg-slate-50" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); setActiveTab('product-detail'); }}>
+                        <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-contain bg-slate-100 group-hover:scale-105 transition duration-300" />
                         {discountPercent > 0 && (
                           <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
                             {discountPercent}% OFF
@@ -583,7 +784,7 @@ export default function App() {
                         </button>
                       </div>
                       <div className="p-2.5 flex flex-col flex-1 justify-between">
-                        <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); }} className="cursor-pointer">
+                        <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); setActiveTab('product-detail'); }} className="cursor-pointer">
                           <h3 className="font-bold text-xs text-slate-900 truncate">{p.title}</h3>
                           <div className="flex items-baseline gap-1.5 mt-1">
                             <span className="font-black text-sm text-red-700">₹{p.price}</span>
@@ -602,8 +803,7 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {activeTab === 'cart' && (
+                      {activeTab === 'cart' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-red-700" /> Aapka Cart ({cart.length})</h2>
             {cart.length === 0 ? (
@@ -615,7 +815,7 @@ export default function App() {
               <div className="flex flex-col gap-3">
                 {cart.map((item, idx) => (
                   <div key={idx} className="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-                    <img src={item.images?.[0]} className="w-16 h-16 rounded-xl object-cover bg-slate-100" />
+                    <img src={item.images?.[0]} className="w-16 h-16 rounded-xl object-contain bg-slate-100" />
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-xs text-slate-900 truncate">{item.title}</h4>
                       <p className="text-[11px] text-slate-500">Size: {item.size} | ₹{item.price}</p>
@@ -649,7 +849,7 @@ export default function App() {
               <div className="grid grid-cols-2 gap-3">
                 {wishlist.map(p => (
                   <div key={p.id} className="bg-white rounded-2xl border p-2.5 shadow-sm">
-                    <img src={p.images?.[0]} className="w-full h-28 object-cover rounded-xl" />
+                    <img src={p.images?.[0]} className="w-full h-28 object-contain rounded-xl bg-slate-50" />
                     <h4 className="font-bold text-xs truncate mt-2">{p.title}</h4>
                     <p className="font-black text-xs text-red-700">₹{p.price}</p>
                     <button onClick={() => handleAddToCart(p)} className="w-full mt-2 py-1.5 bg-red-50 text-red-700 font-extrabold text-[11px] rounded-lg">Move to Cart</button>
@@ -659,7 +859,7 @@ export default function App() {
             )}
           </div>
         )}
-                      {/* Real Orders Display with Product Photos & Details */}
+
         {activeTab === 'orders' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-red-700" /> Mere Orders</h2>
@@ -684,11 +884,10 @@ export default function App() {
                         <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-red-100 text-red-700">{o.status || 'Order Placed'}</span>
                       </div>
                       
-                      {/* Detailed Ordered Products with Photos */}
                       <div className="py-2.5 flex flex-col gap-2">
                         {Array.isArray(o.items) && o.items.map((it, i) => (
                           <div key={i} className="flex items-center gap-2.5 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                            <img src={it.images?.[0] || 'https://via.placeholder.com/80'} alt={it.title} className="w-12 h-12 rounded-lg object-cover bg-white" />
+                            <img src={it.images?.[0] || 'https://via.placeholder.com/80'} alt={it.title} className="w-12 h-12 rounded-lg object-contain bg-white" />
                             <div className="flex-1 min-w-0">
                               <h5 className="font-bold text-xs text-slate-900 truncate">{it.title}</h5>
                               <p className="text-[10px] text-slate-500">Size: {it.size || 'Std'} | Qty: {it.quantity || 1}</p>
@@ -710,7 +909,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Profile Screen with Address Edit & Photo Change */}
         {activeTab === 'profile' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
             <h2 className="text-sm font-black text-slate-900">User Profile</h2>
@@ -742,7 +940,6 @@ export default function App() {
                   <input type="file" accept="image/*" className="hidden" onChange={handleProfilePhotoChange} />
                 </label>
 
-                {/* Profile Address Edit Section */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-black text-xs text-slate-900 flex items-center gap-1.5"><MapPin size={13} className="text-red-700" /> Saved Delivery Address</span>
@@ -794,7 +991,7 @@ export default function App() {
           </div>
         )}
       </main>
-            {/* Checkout Modal (Non-Editable Profile Address + 1-Click Location) */}
+            {/* Checkout Modal */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -813,7 +1010,6 @@ export default function App() {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {/* Single Non-Editable Address Box */}
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
                   <div className="flex justify-between items-center mb-1">
                     <span className="font-black text-slate-900">Delivery Address (Locked):</span>
@@ -849,31 +1045,49 @@ export default function App() {
                       {locLoading ? "Detecting..." : "Allow Location"}
                     </button>
                   ) : (
-                    <div className="w-full py-2.5 bg-red-50 border border-red-300 text-red-700 font-extrabold text-xs rounded-xl text-center shadow-sm">
+                    <div className="w-full py-2.5 bg-emerald-50 border border-emerald-300 text-emerald-800 font-extrabold text-xs rounded-xl text-center shadow-sm">
                       ✓ Location Saved
                     </div>
                   )}
                 </div>
 
+                {/* Advance Delivery Payment with Direct UPI Link */}
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
-                  <p className="text-[11px] font-bold text-slate-700">Advance Delivery Fee: <b className="text-red-700">₹{totalDeliveryFee}</b></p>
-                  <p className="text-[10px] text-slate-500 mb-2">Scan QR & Pay via GPay / PhonePe / Paytm</p>
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=upi://pay?pa=${primaryUpiId}%26pn=BarijanMart%26am=${totalDeliveryFee}%26cu=INR`} 
-                    alt="UPI QR" 
-                    className="mx-auto w-32 h-32 rounded-lg border p-1 bg-white" 
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Enter 12-digit UPI Reference / UTR No *" 
-                    value={utrNumber} 
-                    onChange={e => setUtrNumber(e.target.value)} 
-                    className="w-full mt-3 px-3 py-2 text-xs border border-red-400 bg-white rounded-xl text-center font-mono font-bold" 
-                  />
-                  <label className="block mt-2 text-[10px] text-slate-600 border border-dashed rounded-lg py-1.5 cursor-pointer bg-white">
-                    {paymentScreenshot ? "✓ Slip Photo Selected" : "Upload Payment Slip (Optional)"}
-                    <input type="file" accept="image/*" className="hidden" onChange={handleSlipUpload} />
-                  </label>
+                  <p className="text-[11px] font-bold text-slate-700">
+                    Advance Delivery Fee: <b className="text-red-700">₹{totalDeliveryFee}</b> {totalDeliveryFee === 0 && "(Free Delivery)"}
+                  </p>
+
+                  {totalDeliveryFee > 0 && (
+                    <>
+                      {/* Direct 1-Click Pay Buttons for PhonePe, GPay, Paytm */}
+                      <a 
+                        href={upiPayUrl}
+                        className="mt-2.5 mb-3 w-full py-2.5 bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-600 text-white font-extrabold text-xs rounded-xl shadow flex items-center justify-center gap-2 active:scale-95 transition"
+                      >
+                        <ExternalLink size={14} /> Pay via PhonePe / GPay / Paytm
+                      </a>
+
+                      <p className="text-[10px] text-slate-500 mb-2">Ya neeche diye QR code ko scan karke pay karein:</p>
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(upiPayUrl)}`} 
+                        alt="UPI QR" 
+                        className="mx-auto w-32 h-32 rounded-lg border p-1 bg-white" 
+                      />
+
+                      <label className="block mt-3 text-xs font-bold text-red-700 border-2 border-dashed border-red-300 bg-red-50/50 rounded-xl py-2.5 cursor-pointer">
+                        {paymentScreenshot ? "✓ Payment Screenshot Attached" : "Upload Payment Screenshot * (Compulsory)"}
+                        <input type="file" accept="image/*" className="hidden" onChange={handleSlipUpload} />
+                      </label>
+
+                      <input 
+                        type="text" 
+                        placeholder="Enter 12-digit UTR No (Optional)" 
+                        value={utrNumber} 
+                        onChange={e => setUtrNumber(e.target.value)} 
+                        className="w-full mt-2 px-3 py-2 text-xs border border-slate-300 bg-white rounded-xl text-center font-mono" 
+                      />
+                    </>
+                  )}
                 </div>
 
                 <button 
@@ -1027,46 +1241,9 @@ export default function App() {
         </div>
       )}
 
-      {/* Complete Product Details Quick View Modal */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => setSelectedProduct(null)}>
-          <div className="bg-white w-full max-w-sm rounded-3xl p-4 overflow-hidden shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <img src={selectedProduct.images?.[0]} className="w-full h-60 object-cover rounded-2xl bg-slate-100" />
-            <div className="mt-3">
-              <h3 className="font-black text-sm text-slate-900 leading-snug">{selectedProduct.title}</h3>
-              <p className="text-xs text-slate-600 mt-1 leading-relaxed">{selectedProduct.description}</p>
-              
-              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                <div className="flex items-center gap-1.5 mt-3">
-                  <span className="text-[11px] font-bold text-slate-700">Size:</span>
-                  {selectedProduct.sizes.map((s) => (
-                    <button key={s} onClick={() => setSelectedSize(s)} className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${selectedSize === s ? 'bg-red-700 text-white border-red-700' : 'bg-slate-50 text-slate-700 border-slate-200'}`}>{s}</button>
-                  ))}
-                </div>
-              )}
-
-              <div className="flex items-baseline gap-2 mt-3">
-                <span className="font-black text-lg text-red-700">₹{selectedProduct.price}</span>
-                {selectedProduct.mrp > selectedProduct.price && <span className="text-xs text-slate-400 line-through">₹{selectedProduct.mrp}</span>}
-              </div>
-
-              <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1">
-                <ShieldCheck size={13} className="text-emerald-600" />
-                <span>{selectedProduct.return_policy || '7 Days Replacement Policy'}</span>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <button onClick={() => { handleAddToCart(selectedProduct, selectedSize); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-50 text-red-700 font-extrabold text-xs rounded-xl">Add to Cart</button>
-                <button onClick={() => { handleInitiateBuyNow(selectedProduct); setSelectedProduct(null); }} className="flex-1 py-2.5 bg-red-700 text-white font-extrabold text-xs rounded-xl shadow-md">Buy Now</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Bottom Sticky Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' || activeTab === 'product-detail' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <ShoppingBag size={18} />
           <span className="text-[10px]">Home</span>
         </button>
@@ -1090,13 +1267,14 @@ export default function App() {
       </nav>
     </div>
   );
-                  }
-                
-                          
-              
-      
-  
-      
+                    }
+                    
+                      
+            
+                                    
+    
+        
+          
   
   
   
