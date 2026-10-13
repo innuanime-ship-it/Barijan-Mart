@@ -4,7 +4,7 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3, ExternalLink, Image as ImageIcon
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3, ExternalLink
 } from 'lucide-react';
 
 const ALLOWED_VILLAGES = [
@@ -31,7 +31,7 @@ const isValidIndianMobile = (num) => {
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home'); // 'home' | 'product-detail' | 'cart' | 'wishlist' | 'orders' | 'profile'
+  const [activeTab, setActiveTab] = useState('home');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -401,7 +401,6 @@ export default function App() {
 
   const totalProductAmount = getCheckoutItems().reduce((acc, it) => acc + (Number(it.price) * (it.quantity || 1)), 0);
   
-  // Exact Delivery Fee: Admin defined value respected (0, 20, etc.)
   const totalDeliveryFee = getCheckoutItems().reduce((acc, it) => {
     const fee = (it.delivery_fee !== undefined && it.delivery_fee !== null && it.delivery_fee !== '') ? Number(it.delivery_fee) : 0;
     return acc + fee;
@@ -417,131 +416,6 @@ export default function App() {
     if (!customerLocation) {
       return alert("Kripya 'Allow Location' button dabakar location save karein!");
     }
-    // Screenshot Compulsory when advance delivery fee > 0
-    if (totalDeliveryFee > 0 && !paymentScreenshot) {
-      return alert("Advance Delivery Fee ka payment screenshot upload karna zaroori hai!");
-    }
-    if (altPhone.trim() && !isValidIndianMobile(altPhone.trim())) {
-      return alert("Alternative phone number galat hai! Kripya valid 10-digit number dein.");
-    }
-
-    setIsSubmittingOrder(true);
-    const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
-    const orderItems = getCheckoutItems();
-
-    const fullDeliveryAddress = `Village: ${currentUser.village}, Street/Ward: ${currentUser.street || 'Not Specified'}${currentUser.landmark ? `, Landmark: ` + currentUser.landmark : ''}, Phone: ${currentUser.phone}${altPhone.trim() ? `, Alt Phone: ` + altPhone.trim() : ''}`;
-
-    const orderPayload = {
-      id: newOrderId,
-      customer_name: currentUser.name,
-      customer_phone: currentUser.phone,
-      alt_phone: altPhone.trim() || null,
-      village: currentUser.village,
-      avatar: currentUser.avatar || null,
-      full_address: fullDeliveryAddress,
-      items: orderItems,
-      total_price: totalProductAmount,
-      delivery_fee_paid: totalDeliveryFee,
-      utr: utrNumber.trim() || null,
-      screenshot: paymentScreenshot || null,
-      location: customerLocation,
-      status: 'Order Placed',
-      estimated_delivery: '2-4 Days'
-    };
-
-    try {
-      const { error } = await supabase.from('orders').insert([orderPayload]);
-      if (error) {
-        alert("Order error: " + error.message);
-      } else {
-        const record = { ...orderPayload, created_at: new Date().toISOString() };
-        setMyOrders(prev => [record, ...prev]);
-        if (!checkoutProduct) setCart([]);
-        setCheckoutProduct(null);
-        setIsCheckoutOpen(false);
-        setUtrNumber('');
-        setPaymentScreenshot(null);
-        setCustomerLocation(null);
-        setAltPhone('');
-        setActiveTab('orders');
-        alert("Aapka Barijan Mart order safalta se book ho gaya!");
-      }
-    } catch (e) {
-      alert("Network Error: " + e.message);
-    } finally {
-      setIsSubmittingOrder(false);
-    }
-  };
-
-  const categories = ['All', 'Fashion', 'Footwear', 'Groceries', 'Beauty', 'Electronics'];
-  const filteredProducts = products.filter(p => {
-    const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchSearch = p.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                        p.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchCat && matchSearch;
-  });
-
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col max-w-md mx-auto shadow-2xl relative pb-20 select-none">
-      <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            {currentUser?.avatar ? (
-              <img src={currentUser.avatar} alt="Profile" className="w-9 h-9 rounded-full border-2 border-white shadow-sm object-cover" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center font-black text-xs text-white shadow">
-                {currentUser?.name ? currentUser.name.charAt(0) : <User size={16} />}
-              </div>
-            )}
-            <div>
-              <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
-              <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[170px]">
-                {currentUser ? `📍 ${currentUser.village}` : "⚡ Direct Village Doorstep Delivery"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
-              <Heart size={17} className={wishlist.length > 0 ? "fill-white text-white" : "text-white"} />
-              {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
-            </button>
-            <button onClick={() => { if (!currentUser) setAuthMode('register'); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
-              <ShoppingCart size={17} />
-              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3 relative">
-          <Search className="absolute left-3.5 top-2.5 text-slate-400" size={15} />
-          <input 
-            type="text" 
-            placeholder="Search groceries, clothing, trending items..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white rounded-xl text-xs text-slate-900 shadow-inner outline-none placeholder-slate-400 focus:ring-2 focus:ring-red-400 transition"
-          />
-        </div>
-      </header>
-
-      <div className="bg-gradient-to-r from-red-800 to-rose-900 text-white px-4 py-1.5 flex items-center justify-between text-[11px] shadow-inner">
-        <div className="flex items-center gap-1.5 font-bold">
-          <PhoneCall size={13} className="text-yellow-300 animate-pulse" />
-          <span>Customer Care Support:</span>
-        </div>
-        <a href="tel:9204184716" className="bg-white/20 hover:bg-white/30 px-2.5 py-0.5 rounded-full font-black text-yellow-300 tracking-wider">
-          9204184716
-        </a>
-      </div>
-        const handleExecuteOrder = async () => {
-    if (!currentUser) {
-      setAuthMode('register');
-      return;
-    }
-    if (!customerLocation) {
-      return alert("Kripya 'Allow Location' button dabakar location save karein!");
-    }
-    // Screenshot Compulsory when advance delivery fee > 0
     if (totalDeliveryFee > 0 && !paymentScreenshot) {
       return alert("Advance Delivery Fee ka payment screenshot upload karna zaroori hai!");
     }
@@ -658,7 +532,6 @@ export default function App() {
         </a>
       </div>
             <main className="p-3.5 flex-1">
-        {/* Full-Screen Product Detail Page */}
         {activeTab === 'product-detail' && selectedProduct && (
           <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
             <button 
@@ -668,7 +541,6 @@ export default function App() {
               <ArrowLeft size={14} /> Back to Products
             </button>
 
-            {/* Natural Aspect Ratio Photo Box (1:1, 3:4 etc. without cropping) */}
             <div className="w-full bg-slate-100 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200">
               <img 
                 src={selectedProduct.images?.[0] || 'https://via.placeholder.com/300'} 
@@ -729,7 +601,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Regular Home Product Feed */}
         {activeTab === 'home' && (
           <div>
             <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
@@ -991,8 +862,7 @@ export default function App() {
           </div>
         )}
       </main>
-            {/* Checkout Modal */}
-      {isCheckoutOpen && (
+            {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3 mb-3">
@@ -1051,7 +921,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Advance Delivery Payment with Direct UPI Link */}
                 <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
                   <p className="text-[11px] font-bold text-slate-700">
                     Advance Delivery Fee: <b className="text-red-700">₹{totalDeliveryFee}</b> {totalDeliveryFee === 0 && "(Free Delivery)"}
@@ -1059,7 +928,6 @@ export default function App() {
 
                   {totalDeliveryFee > 0 && (
                     <>
-                      {/* Direct 1-Click Pay Buttons for PhonePe, GPay, Paytm */}
                       <a 
                         href={upiPayUrl}
                         className="mt-2.5 mb-3 w-full py-2.5 bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-600 text-white font-extrabold text-xs rounded-xl shadow flex items-center justify-center gap-2 active:scale-95 transition"
@@ -1103,7 +971,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Auth Modals */}
       {authMode === 'register' && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <form onSubmit={handleRegister} className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-2.5">
@@ -1241,7 +1108,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom Sticky Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
         <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' || activeTab === 'product-detail' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
           <ShoppingBag size={18} />
@@ -1267,15 +1133,16 @@ export default function App() {
       </nav>
     </div>
   );
-                    }
-                    
-                      
+          }
             
-                                    
-    
-        
-          
+              
+                
+                                                                    
+      
+      
   
+
+        
   
   
   
