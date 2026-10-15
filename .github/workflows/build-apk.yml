@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK & AAB
 
 on:
   workflow_dispatch:
@@ -59,15 +59,32 @@ jobs:
           }
           " >> android/build.gradle
 
-      - name: Build Debug APK
+      - name: Build Debug APK & Release AAB
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
+          ./gradlew bundleRelease
+
+      - name: Sign Release AAB
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore release.keystore \
+            -storepass "Barijan@2026" -keypass "Barijan@2026" \
+            android/app/build/outputs/bundle/release/app-release.aab barijanmart
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Barijan-Mart-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Signed Play Store AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: Barijan-Mart-PlayStore-AAB
+          path: android/app/build/outputs/bundle/release/*.aab
           
