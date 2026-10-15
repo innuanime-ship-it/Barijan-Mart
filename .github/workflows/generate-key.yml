@@ -1,0 +1,29 @@
+name: Generate Permanent Keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate Keystore
+        run: |
+          keytool -genkeypair -v -storetype PKCS12 -keystore barijan.keystore \
+          -alias barijanmart -keyalg RSA -keysize 2048 -validity 10000 \
+          -storepass Barijan@2026 -keypass Barijan@2026 \
+          -dname "CN=BarijanMart, OU=Mobile, O=BarijanMart, L=Barijan, S=Bihar, C=IN"
+
+      - name: Convert to Base64
+        run: |
+          echo "=================== COPY THIS SECRET ==================="
+          base64 -w 0 barijan.keystore
+          echo ""
+          echo "========================================================"
+
+      - name: Upload Backup Keystore File
+        uses: actions/upload-artifact@v4
+        with:
+          name: Barijan-Keystore-Backup
+          path: barijan.keystore
+          
