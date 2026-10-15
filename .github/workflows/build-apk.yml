@@ -36,32 +36,37 @@ jobs:
         run: |
           npx cap add android
 
-      - name: Setup App Icon and Fullscreen Splash
+      - name: Generate App Icons & Fullscreen Splash
         run: |
-          # 1. Agar icon logo hai toh icon generate karein
+          # 1. Assets prepare karein
           if [ -f "assets/logo.png" ]; then
             cp assets/logo.png assets/icon-only.png || true
-            npx @capacitor/assets generate --android --iconOnly || true
+            cp assets/logo.png assets/icon-foreground.png || true
           fi
 
-          # 2. Agar alag se splash.png upload kiya hai, toh use seedha inject karein
-          SPLASH_FILE="assets/splash.png"
-          if [ ! -f "$SPLASH_FILE" ] && [ -f "assets/logo.png" ]; then
-            SPLASH_FILE="assets/logo.png"
+          # 2. Capacitor se sabhi sizes ke App Icons generate karein
+          npx @capacitor/assets generate --android || true
+
+          # 3. Fullscreen Splash image ko Android drawables mein set karein
+          SPLASH_SRC="assets/splash.png"
+          if [ ! -f "$SPLASH_SRC" ] && [ -f "assets/logo.png" ]; then
+            SPLASH_SRC="assets/logo.png"
           fi
 
-          if [ -f "$SPLASH_FILE" ]; then
+          if [ -f "$SPLASH_SRC" ]; then
             mkdir -p android/app/src/main/res/drawable
             mkdir -p android/app/src/main/res/drawable-port-xxxhdpi
             mkdir -p android/app/src/main/res/drawable-land-xxxhdpi
 
-            cp "$SPLASH_FILE" android/app/src/main/res/drawable/splash.png
-            cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-xxxhdpi/splash.png
-            cp "$SPLASH_FILE" android/app/src/main/res/drawable-land-xxxhdpi/splash.png
+            cp "$SPLASH_SRC" android/app/src/main/res/drawable/splash.png
+            cp "$SPLASH_SRC" android/app/src/main/res/drawable-port-xxxhdpi/splash.png
+            cp "$SPLASH_SRC" android/app/src/main/res/drawable-land-xxxhdpi/splash.png
           fi
 
-          # 3. Android Theme styles fix
+          # 4. Splash Theme style fix karein
           mkdir -p android/app/src/main/res/values
+          mkdir -p android/app/src/main/res/values-v31
+
           cat << 'EOF' > android/app/src/main/res/values/styles.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
@@ -76,6 +81,16 @@ jobs:
               </style>
               <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
                   <item name="android:background">@drawable/splash</item>
+              </style>
+          </resources>
+          EOF
+
+          cat << 'EOF' > android/app/src/main/res/values-v31/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+                  <item name="android:windowSplashScreenBackground">#991B1B</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>
               </style>
           </resources>
           EOF
