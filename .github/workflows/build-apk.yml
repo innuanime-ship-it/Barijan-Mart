@@ -30,19 +30,55 @@ jobs:
       - name: Create Web Assets (dist)
         run: |
           mkdir -p dist
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://barijan-mart.pages.dev" /></head><body></body></html>' > dist/index.html
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://barijan-mart.pages.dev" /></head><body style="background-color:#991B1B;"></body></html>' > dist/index.html
 
       - name: Add Android Platform
         run: |
           npx cap add android
 
-      - name: Generate Icon & Splash Screen
+      - name: Setup App Icon and Fullscreen Splash
         run: |
+          # 1. Agar icon logo hai toh icon generate karein
           if [ -f "assets/logo.png" ]; then
             cp assets/logo.png assets/icon-only.png || true
-            cp assets/logo.png assets/splash.png || true
-            npx @capacitor/assets generate --android || true
+            npx @capacitor/assets generate --android --iconOnly || true
           fi
+
+          # 2. Agar alag se splash.png upload kiya hai, toh use seedha inject karein
+          SPLASH_FILE="assets/splash.png"
+          if [ ! -f "$SPLASH_FILE" ] && [ -f "assets/logo.png" ]; then
+            SPLASH_FILE="assets/logo.png"
+          fi
+
+          if [ -f "$SPLASH_FILE" ]; then
+            mkdir -p android/app/src/main/res/drawable
+            mkdir -p android/app/src/main/res/drawable-port-xxxhdpi
+            mkdir -p android/app/src/main/res/drawable-land-xxxhdpi
+
+            cp "$SPLASH_FILE" android/app/src/main/res/drawable/splash.png
+            cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-xxxhdpi/splash.png
+            cp "$SPLASH_FILE" android/app/src/main/res/drawable-land-xxxhdpi/splash.png
+          fi
+
+          # 3. Android Theme styles fix
+          mkdir -p android/app/src/main/res/values
+          cat << 'EOF' > android/app/src/main/res/values/styles.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+                  <item name="colorPrimary">#991B1B</item>
+                  <item name="colorPrimaryDark">#7F1D1D</item>
+                  <item name="colorAccent">#991B1B</item>
+              </style>
+              <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+                  <item name="windowActionBar">false</item>
+                  <item name="windowNoTitle">true</item>
+              </style>
+              <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
+                  <item name="android:background">@drawable/splash</item>
+              </style>
+          </resources>
+          EOF
 
       - name: Sync Capacitor
         run: |
@@ -70,11 +106,14 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
-            -keystore release.keystore \
-            -storepass "Barijan@2026" -keypass "Barijan@2026" \
-            android/app/build/outputs/bundle/release/app-release.aab barijanmart
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > release.keystore
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore release.keystore \
+              -storepass "Barijan@2026" -keypass "Barijan@2026" \
+              android/app/build/outputs/bundle/release/app-release.aab barijanmart
+            echo "AAB Successfully Signed!"
+          fi
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
