@@ -1,0 +1,9 @@
+{
+  "appId": "com.barijanmart.app",
+  "appName": "Barijan Mart",
+  "webDir": "dist",
+  "server": {
+    "url": "https://barijan-mart.pages.dev",
+    "cleartext": false
+  }
+}
