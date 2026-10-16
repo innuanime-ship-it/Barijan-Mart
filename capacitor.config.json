@@ -2,19 +2,20 @@
   "appId": "com.barijanmart.app",
   "appName": "Barijan Mart",
   "webDir": "dist",
-  "backgroundColor": "#991B1B",
   "server": {
     "url": "https://barijan-mart.pages.dev",
     "cleartext": false
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 3000,
+      "launchShowDuration": 2000,
       "launchAutoHide": true,
-      "backgroundColor": "#991B1B",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
-      "showSpinner": false
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
     }
   }
 }
+
