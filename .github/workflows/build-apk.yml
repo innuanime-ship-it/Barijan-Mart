@@ -36,34 +36,45 @@ jobs:
         run: |
           npx cap add android
 
-      - name: Generate App Icons & Fullscreen Splash
+      - name: Setup App Icon Only
         run: |
-          # 1. Assets prepare karein
           if [ -f "assets/logo.png" ]; then
             cp assets/logo.png assets/icon-only.png || true
             cp assets/logo.png assets/icon-foreground.png || true
+            npx @capacitor/assets generate --android --iconOnly || true
           fi
 
-          # 2. Capacitor se sabhi sizes ke App Icons generate karein
-          npx @capacitor/assets generate --android || true
-
-          # 3. Fullscreen Splash image ko Android drawables mein set karein
-          SPLASH_SRC="assets/splash.png"
-          if [ ! -f "$SPLASH_SRC" ] && [ -f "assets/logo.png" ]; then
-            SPLASH_SRC="assets/logo.png"
+      - name: Inject Pure Fullscreen Splash (No Icon / No Circle)
+        run: |
+          # 1. Fullscreen splash image ko sabhi density drawables mein copy karein
+          SPLASH_FILE="assets/splash.png"
+          if [ ! -f "$SPLASH_FILE" ] && [ -f "assets/logo.png" ]; then
+            SPLASH_FILE="assets/logo.png"
           fi
 
-          if [ -f "$SPLASH_SRC" ]; then
-            mkdir -p android/app/src/main/res/drawable
-            mkdir -p android/app/src/main/res/drawable-port-xxxhdpi
-            mkdir -p android/app/src/main/res/drawable-land-xxxhdpi
+          mkdir -p android/app/src/main/res/drawable
+          mkdir -p android/app/src/main/res/drawable-port-xxxhdpi
+          mkdir -p android/app/src/main/res/drawable-port-xxhdpi
+          mkdir -p android/app/src/main/res/drawable-port-xhdpi
+          mkdir -p android/app/src/main/res/drawable-port-hdpi
+          mkdir -p android/app/src/main/res/drawable-port-mdpi
 
-            cp "$SPLASH_SRC" android/app/src/main/res/drawable/splash.png
-            cp "$SPLASH_SRC" android/app/src/main/res/drawable-port-xxxhdpi/splash.png
-            cp "$SPLASH_SRC" android/app/src/main/res/drawable-land-xxxhdpi/splash.png
-          fi
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable/splash.png
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-xxxhdpi/splash.png
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-xxhdpi/splash.png
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-xhdpi/splash.png
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-hdpi/splash.png
+          cp "$SPLASH_FILE" android/app/src/main/res/drawable-port-mdpi/splash.png
 
-          # 4. Splash Theme style fix karein
+          # 2. Android 12+ ke circle mask ko khatam karne ke liye transparent layer
+          cat << 'EOF' > android/app/src/main/res/drawable/transparent_layer.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="@android:color/transparent" />
+          </shape>
+          EOF
+
+          # 3. Native Fullscreen Splash Styles
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-v31
 
@@ -89,10 +100,77 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
-                  <item name="android:windowSplashScreenBackground">#991B1B</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>
+                  <item name="android:windowSplashScreenBackground">@android:color/black</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/transparent_layer</item>
               </style>
           </resources>
+          EOF
+
+      - name: Inject 100% Native-Looking Offline Screen
+        run: |
+          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
+
+          cat << 'EOF' > android/app/src/main/java/com/barijanmart/app/MainActivity.java
+          package com.barijanmart.app;
+
+          import android.os.Bundle;
+          import android.webkit.WebResourceError;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebView;
+          import com.getcapacitor.BridgeActivity;
+          import com.getcapacitor.BridgeWebViewClient;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onStart() {
+                  super.onStart();
+                  if (this.bridge != null && this.bridge.getWebView() != null) {
+                      this.bridge.getWebView().setOverScrollMode(WebView.OVER_SCROLL_NEVER);
+                      this.bridge.getWebView().setWebViewClient(new BridgeWebViewClient(this.bridge) {
+                          @Override
+                          public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                              if (request.isForMainFrame()) {
+                                  String nativeOfflineScreen = "<!DOCTYPE html>"
+                                      + "<html>"
+                                      + "<head>"
+                                      + "<meta name='viewport' content='width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'>"
+                                      + "<style>"
+                                      + "* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; font-family: Roboto, -apple-system, sans-serif; }"
+                                      + "body { background: #FFFFFF; height: 100vh; width: 100vw; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; touch-action: none; }"
+                                      + ".header { padding: 18px 20px; font-size: 18px; font-weight: 800; color: #111827; letter-spacing: -0.3px; border-bottom: 1px solid #F3F4F6; }"
+                                      + ".main-content { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 32px; flex: 1; text-align: center; }"
+                                      + ".icon-wrapper { width: 90px; height: 90px; border-radius: 28px; background: #FEF2F2; display: flex; align-items: center; justify-content: center; margin-bottom: 24px; box-shadow: 0 8px 24px rgba(239, 68, 68, 0.12); }"
+                                      + ".icon-wrapper svg { width: 44px; height: 44px; stroke: #DC2626; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }"
+                                      + "h2 { font-size: 21px; font-weight: 700; color: #111827; margin-bottom: 10px; letter-spacing: -0.4px; }"
+                                      + "p { font-size: 14px; line-height: 1.55; color: #6B7280; margin-bottom: 32px; max-width: 280px; }"
+                                      + ".retry-btn { width: 100%; max-width: 280px; height: 50px; background: #991B1B; color: #FFFFFF; border: none; border-radius: 14px; font-size: 15px; font-weight: 700; letter-spacing: 0.2px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(153, 27, 27, 0.35); transition: 0.15s; }"
+                                      + ".retry-btn:active { transform: scale(0.97); background: #7F1D1D; }"
+                                      + ".footer { padding: 20px; text-align: center; font-size: 12px; font-weight: 600; color: #9CA3AF; letter-spacing: 0.5px; text-transform: uppercase; }"
+                                      + "</style>"
+                                      + "</head>"
+                                      + "<body>"
+                                      + "<div class='header'>Barijan Mart</div>"
+                                      + "<div class='main-content'>"
+                                      + "<div class='icon-wrapper'>"
+                                      + "<svg viewBox='0 0 24 24'><line x1='1' y1='1' x2='23' y2='23'></line><path d='M16.72 11.06A10.94 10.94 0 0 1 19 12.55'></path><path d='M5 12.55a10.94 10.94 0 0 1 5.17-2.39'></path><path d='M10.71 5.05A16 16 0 0 1 22.58 9'></path><path d='M1.42 9a15.91 15.91 0 0 1 4.7-2.88'></path><path d='M8.53 16.11a6 6 0 0 1 6.95 0'></path><line x1='12' y1='20' x2='12.01' y2='20'></line></svg>"
+                                      + "</div>"
+                                      + "<h2>No Connection</h2>"
+                                      + "<p>Aapka internet band hai. Kripya apna mobile network check karein.</p>"
+                                      + "<button class='retry-btn' onclick='window.location.reload()'>Retry Again</button>"
+                                      + "</div>"
+                                      + "<div class='footer'>Barijan Mart &bull; 100% Secure</div>"
+                                      + "</body>"
+                                      + "</html>";
+                                  view.loadDataWithBaseURL("https://barijan-mart.pages.dev", nativeOfflineScreen, "text/html", "UTF-8", null);
+                              } else {
+                                  super.onReceivedError(view, request, error);
+                              }
+                          }
+                      });
+                  }
+              }
+          }
           EOF
 
       - name: Sync Capacitor
