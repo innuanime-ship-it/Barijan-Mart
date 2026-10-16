@@ -30,60 +30,61 @@ jobs:
       - name: Create Web Assets (dist)
         run: |
           mkdir -p dist
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://barijan-mart.pages.dev" /></head><body style="background-color:#991B1B;"></body></html>' > dist/index.html
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://barijan-mart.pages.dev" /></head><body style="background-color:#025CE5;"></body></html>' > dist/index.html
 
       - name: Add Android Platform
         run: |
           npx cap add android
 
-      - name: Force Inject Logo Icons (All Resolutions)
+      - name: Fix App Icon (Safe Zone Padding - No Cutout)
         run: |
-          # Logo file confirm karein
           LOGO_SRC="assets/logo.png"
           if [ -f "$LOGO_SRC" ]; then
             sudo apt-get update && sudo apt-get install -y imagemagick
-            
-            # Har resolution me logo resize karke inject karein
+
+            # Edge color detect karein
+            bg_color=$(convert "$LOGO_SRC" -format "%[pixel:p{5,5}]" info:)
+
             for item in "mdpi:48" "hdpi:72" "xhdpi:96" "xxhdpi:144" "xxxhdpi:192"; do
               density=$(echo $item | cut -d: -f1)
               size=$(echo $item | cut -d: -f2)
-              
               target_dir="android/app/src/main/res/mipmap-$density"
               mkdir -p "$target_dir"
-              
-              convert "$LOGO_SRC" -resize "${size}x${size}" "$target_dir/ic_launcher.png"
-              convert "$LOGO_SRC" -resize "${size}x${size}" "$target_dir/ic_launcher_round.png"
-              convert "$LOGO_SRC" -resize "${size}x${size}" "$target_dir/ic_launcher_foreground.png"
+
+              # 72% inner safe zone taaki circular mask me text na kate
+              inner_size=$(( size * 72 / 100 ))
+              convert "$LOGO_SRC" -resize "${inner_size}x${inner_size}" -gravity center -background "$bg_color" -extent "${size}x${size}" "$target_dir/ic_launcher.png"
+              convert "$LOGO_SRC" -resize "${inner_size}x${inner_size}" -gravity center -background "$bg_color" -extent "${size}x${size}" "$target_dir/ic_launcher_round.png"
+              convert "$LOGO_SRC" -resize "${inner_size}x${inner_size}" -gravity center -background none -extent "${size}x${size}" "$target_dir/ic_launcher_foreground.png"
             done
-            echo "Icons 100% Successfully Injected!"
           fi
 
-      - name: Force Fullscreen Splash Screen
+      - name: Inject Fullscreen Splash Image & Native 2-Second Code
         run: |
-          # Default conflict splash.xml remove karein
-          rm -f android/app/src/main/res/drawable/splash.xml || true
-
-          # Splash file dhundhein
+          # 1. Splash image identify karein
           SPLASH_SRC="assets/splash.png"
-          if [ ! -f "$SPLASH_SRC" ] && [ -f "assets/logo.png" ]; then
-            SPLASH_SRC="assets/logo.png"
+          if [ ! -f "$SPLASH_SRC" ]; then
+            SPLASH_SRC=$(find assets/ -type f \( -name "*.png" -o -name "*.jpg" \) ! -name "logo.png" | head -n 1)
           fi
 
-          if [ -f "$SPLASH_SRC" ]; then
+          if [ -n "$SPLASH_SRC" ] && [ -f "$SPLASH_SRC" ]; then
             mkdir -p android/app/src/main/res/drawable
             cp "$SPLASH_SRC" android/app/src/main/res/drawable/splash.png
-
-            # Sabhi densities me copy karein
             for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
               mkdir -p "android/app/src/main/res/drawable-port-$density"
-              mkdir -p "android/app/src/main/res/drawable-land-$density"
               cp "$SPLASH_SRC" "android/app/src/main/res/drawable-port-$density/splash.png"
-              cp "$SPLASH_SRC" "android/app/src/main/res/drawable-land-$density/splash.png"
             done
-            echo "Fullscreen Splash Injected!"
           fi
 
-          # Android Theme Styles - WindowBackground me seedha splash photo
+          # 2. Transparent layer for Android 12 OS circle removal
+          cat << 'EOF' > android/app/src/main/res/drawable/transparent_layer.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <shape xmlns:android="http://schemas.android.com/apk/res/android">
+              <solid android:color="@android:color/transparent" />
+          </shape>
+          EOF
+
+          # 3. Android Launch Themes
           mkdir -p android/app/src/main/res/values
           mkdir -p android/app/src/main/res/values-v31
 
@@ -91,9 +92,9 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-                  <item name="colorPrimary">#991B1B</item>
-                  <item name="colorPrimaryDark">#7F1D1D</item>
-                  <item name="colorAccent">#991B1B</item>
+                  <item name="colorPrimary">#025CE5</item>
+                  <item name="colorPrimaryDark">#0143A3</item>
+                  <item name="colorAccent">#025CE5</item>
               </style>
               <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
                   <item name="windowActionBar">false</item>
@@ -109,21 +110,22 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
-                  <item name="android:windowSplashScreenBackground">#991B1B</item>
-                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash</item>
+                  <item name="android:windowSplashScreenBackground">#025CE5</item>
+                  <item name="android:windowSplashScreenAnimatedIcon">@drawable/transparent_layer</item>
               </style>
           </resources>
           EOF
 
-      - name: Inject Professional Native Offline Screen
-        run: |
-          sed -i '/<application/i <uses-permission android:name="android.permission.INTERNET" />' android/app/src/main/AndroidManifest.xml
-          sed -i '/<application/i <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' android/app/src/main/AndroidManifest.xml
-
+          # 4. MainActivity - Native 2-Second Fullscreen Splash + Native Offline Screen
           cat << 'EOF' > android/app/src/main/java/com/barijanmart/app/MainActivity.java
           package com.barijanmart.app;
 
           import android.os.Bundle;
+          import android.os.Handler;
+          import android.os.Looper;
+          import android.view.ViewGroup;
+          import android.widget.FrameLayout;
+          import android.widget.ImageView;
           import android.webkit.WebResourceError;
           import android.webkit.WebResourceRequest;
           import android.webkit.WebView;
@@ -131,6 +133,51 @@ jobs:
           import com.getcapacitor.BridgeWebViewClient;
 
           public class MainActivity extends BridgeActivity {
+              private ImageView splashOverlay;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  // 100% Fullscreen Splash Screen (No Circle, No Mask)
+                  try {
+                      int splashResId = getResources().getIdentifier("splash", "drawable", getPackageName());
+                      if (splashResId != 0) {
+                          FrameLayout root = (FrameLayout) findViewById(android.R.id.content);
+                          splashOverlay = new ImageView(this);
+                          splashOverlay.setImageResource(splashResId);
+                          splashOverlay.setScaleType(ImageView.ScaleType.FIT_XY);
+
+                          FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                              ViewGroup.LayoutParams.MATCH_PARENT,
+                              ViewGroup.LayoutParams.MATCH_PARENT
+                          );
+                          root.addView(splashOverlay, params);
+
+                          // Strict 2 Seconds (2000 ms) Duration
+                          new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                              @Override
+                              public void run() {
+                                  if (splashOverlay != null) {
+                                      splashOverlay.animate()
+                                          .alpha(0f)
+                                          .setDuration(300)
+                                          .withEndAction(new Runnable() {
+                                              @Override
+                                              public void run() {
+                                                  if (splashOverlay != null && splashOverlay.getParent() != null) {
+                                                      ((ViewGroup) splashOverlay.getParent()).removeView(splashOverlay);
+                                                      splashOverlay = null;
+                                                  }
+                                              }
+                                          });
+                                  }
+                              }
+                          }, 2000);
+                      }
+                  } catch (Exception ignored) {}
+              }
+
               @Override
               public void onStart() {
                   super.onStart();
