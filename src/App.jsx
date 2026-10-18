@@ -32,14 +32,101 @@ const isValidIndianMobile = (num) => {
 };
 
 export default function App() {
-  // Navigation History Stack (Back Button Navigation)
+  // 1. Saare States Shuruat Mein Hi Declare Honge (Crash Fix)
   const [screenStack, setScreenStack] = useState(['home']);
-  const activeTab = screenStack[screenStack.length - 1];
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [checkoutProduct, setCheckoutProduct] = useState(null);
+
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedSize, setSelectedSize] = useState('M');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Social Links Managed by Admin
+  const [socialLinks, setSocialLinks] = useState({
+    support_phone: '9204184716',
+    whatsapp_url: 'https://wa.me/919204184716',
+    facebook_url: 'https://facebook.com',
+    instagram_url: 'https://instagram.com'
+  });
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('bm_current_customer') || 'null');
+    } catch (e) {
+      return null;
+    }
+  });
+
+  // BPIN Auth States
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'forgot'
+  const [authName, setAuthName] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [isPhoneLocked, setIsPhoneLocked] = useState(false);
+  const [authPin, setAuthPin] = useState('');
+  const [newBpin, setNewBpin] = useState('');
+    // Profile Address Form State (15 Gaon Format)
+  const [addressForm, setAddressForm] = useState({
+    village: currentUser?.village || '',
+    wardNo: currentUser?.wardNo || '',
+    panchayat: currentUser?.panchayat || '',
+    postOffice: currentUser?.postOffice || '',
+    block: currentUser?.block || '',
+    district: currentUser?.district || '',
+    pincode: currentUser?.pincode || ''
+  });
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
+
+  // Cart, Wishlist aur Orders States
+  const [cart, setCart] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('bm_cart') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [wishlist, setWishlist] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('bm_wishlist') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const [myOrders, setMyOrders] = useState([]);
+
+  // Checkout Extra States
+  const [altPhone, setAltPhone] = useState('');
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const [locLoading, setLocLoading] = useState(false);
+  const [utrNumber, setUtrNumber] = useState('');
+  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+
+  // Return & Replacement Modal State
+  const [selectedOrderForAction, setSelectedOrderForAction] = useState(null);
+  const [actionType, setActionType] = useState('return');
+  const [actionReason, setActionReason] = useState('');
+  const [refundMethod, setRefundMethod] = useState('upi');
+  const [refundUpi, setRefundUpi] = useState('');
+  const [bankDetails, setBankDetails] = useState({ accountNo: '', ifsc: '', holderName: '' });
+  const [submittingAction, setSubmittingAction] = useState(false);
+
+  // 2. Navigation Helpers & Safety Wrapper
+  const activeTab = screenStack[screenStack.length - 1] || 'home';
 
   const navigateTo = (screenName) => {
     setScreenStack(prev => [...prev, screenName]);
     window.history.pushState({ screen: screenName }, '');
   };
+
+  // Safety alias taaki purane buttons se crash na ho
+  const setActiveTab = (screenName) => navigateTo(screenName);
 
   const goBack = () => {
     if (isCheckoutOpen) {
@@ -58,7 +145,8 @@ export default function App() {
       }
     }
   };
-    // Mobile Hardware Back Button Listener
+
+  // Mobile Hardware Back Button Listener
   useEffect(() => {
     const handlePopState = () => {
       if (isCheckoutOpen) {
@@ -77,45 +165,12 @@ export default function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [screenStack, isCheckoutOpen]);
-
-  // Main Products & Catalog States
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [selectedSize, setSelectedSize] = useState('M');
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  // Social Links Managed by Admin
-  const [socialLinks, setSocialLinks] = useState({
-    support_phone: '9204184716',
-    whatsapp_url: 'https://wa.me/919204184716',
-    facebook_url: 'https://facebook.com',
-    instagram_url: 'https://instagram.com'
-  });
-
-  const [currentUser, setCurrentUser] = useState(() => {
-    return JSON.parse(localStorage.getItem('bm_current_customer') || 'null');
-  });
-
-  // BPIN Auth States
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'forgot'
-  const [authName, setAuthName] = useState('');
-  const [authPhone, setAuthPhone] = useState('');
-  const [isPhoneLocked, setIsPhoneLocked] = useState(false);
-  const [authPin, setAuthPin] = useState('');
-  const [newBpin, setNewBpin] = useState('');
-
-  // Auto-Fill SIM Hint Handler
+    // Auto-Fill SIM Hint Handler
   const handlePhoneBoxClick = async () => {
     if (isPhoneLocked) return;
     try {
       if (navigator.credentials && navigator.credentials.get) {
-        const cred = await navigator.credentials.get({
-          // Native credential request options
-        });
+        const cred = await navigator.credentials.get({});
         if (cred && cred.id) {
           const clean = cred.id.replace(/\D/g, '').slice(-10);
           if (isValidIndianMobile(clean)) {
@@ -129,41 +184,6 @@ export default function App() {
       console.log("SIM Hint not triggered, manual typing allowed.");
     }
   };
-    // Profile Address Form State (15 Gaon Format)
-  const [addressForm, setAddressForm] = useState({
-    village: currentUser?.village || '',
-    wardNo: currentUser?.wardNo || '',
-    panchayat: currentUser?.panchayat || '',
-    postOffice: currentUser?.postOffice || '',
-    block: currentUser?.block || '',
-    district: currentUser?.district || '',
-    pincode: currentUser?.pincode || ''
-  });
-  const [isEditingAddress, setIsEditingAddress] = useState(false);
-
-  // Cart, Wishlist and Orders States
-  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('bm_cart') || '[]'));
-  const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem('bm_wishlist') || '[]'));
-  const [myOrders, setMyOrders] = useState([]);
-
-  // Checkout States
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-  const [checkoutProduct, setCheckoutProduct] = useState(null);
-  const [altPhone, setAltPhone] = useState('');
-  const [customerLocation, setCustomerLocation] = useState(null);
-  const [locLoading, setLocLoading] = useState(false);
-  const [utrNumber, setUtrNumber] = useState('');
-  const [paymentScreenshot, setPaymentScreenshot] = useState(null);
-  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
-
-  // Return & Replacement Modal State
-  const [selectedOrderForAction, setSelectedOrderForAction] = useState(null);
-  const [actionType, setActionType] = useState('return');
-  const [actionReason, setActionReason] = useState('');
-  const [refundMethod, setRefundMethod] = useState('upi');
-  const [refundUpi, setRefundUpi] = useState('');
-  const [bankDetails, setBankDetails] = useState({ accountNo: '', ifsc: '', holderName: '' });
-  const [submittingAction, setSubmittingAction] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('bm_cart', JSON.stringify(cart));
@@ -189,7 +209,8 @@ export default function App() {
     setWishlist(prev => prev.filter(item => item.id !== productId));
     alert("Product ko wishlist se unlist (remove) kar diya gaya!");
   };
-    useEffect(() => {
+
+  useEffect(() => {
     fetchCatalog();
     fetchAdminSettings();
     if (currentUser?.phone) {
@@ -225,8 +246,7 @@ export default function App() {
       supabase.removeChannel(settingsChannel);
     };
   }, [currentUser]);
-
-  const fetchAdminSettings = async () => {
+    const fetchAdminSettings = async () => {
     try {
       const { data, error } = await supabase.from('app_settings').select('*').single();
       if (!error && data) {
@@ -274,6 +294,59 @@ export default function App() {
     } catch (err) {
       console.error("Order fetch error:", err);
     }
+  };
+
+  const getMinQty = (prod) => {
+    return Number(prod?.min_quantity || prod?.min_items || 1);
+  };
+
+  const handleAddToCart = (prod, sizeToUse = null) => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthOpen(true);
+      return;
+    }
+    const minQ = getMinQty(prod);
+    const finalSize = sizeToUse || selectedSize || 'Standard';
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.id === prod.id && item.size === finalSize);
+      if (idx > -1) {
+        const copy = [...prev];
+        copy[idx].quantity += 1;
+        return copy;
+      }
+      return [...prev, { ...prod, size: finalSize, quantity: minQ }];
+    });
+    alert("Item Cart mein joda gaya!");
+  };
+
+  const handleInitiateBuyNow = (prod) => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthOpen(true);
+      return;
+    }
+    const minQ = getMinQty(prod);
+    setCheckoutProduct({ ...prod, quantity: minQ });
+    setSelectedSize(prod.sizes?.[0] || 'M');
+    setIsCheckoutOpen(true);
+  };
+
+  const updateCartQty = (id, size, change) => {
+    setCart(prev => {
+      return prev.map(item => {
+        if (item.id === id && item.size === size) {
+          const minQ = getMinQty(item);
+          const newQty = item.quantity + change;
+          if (newQty < minQ && change < 0) {
+            alert("Aapko kam se kam minimum requirement jitna order karna hoga!");
+            return null;
+          }
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter(Boolean);
+    });
   };
     // Registration Handler with 4-Digit BPIN
   const handleRegisterWithPin = (e) => {
@@ -382,7 +455,6 @@ export default function App() {
       return alert("Registered Naam match nahi hua! Kripya vahi naam dalein jo khata banate waqt dala tha.");
     }
 
-    // Update BPIN & Refresh Account
     allUsers[index].bpin = newBpin.trim();
     localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
     localStorage.setItem('bm_current_customer', JSON.stringify(allUsers[index]));
@@ -396,8 +468,7 @@ export default function App() {
     setIsPhoneLocked(false);
     alert("Aapka naya BPIN safalta se set ho gaya aur account refresh hokar login ho gaya!");
   };
-    // Save Structured Address in Profile
-  const handleSaveProfileAddress = (e) => {
+    const handleSaveProfileAddress = (e) => {
     e.preventDefault();
     if (!addressForm.village) {
       return alert("Kripya apna gaon select karein!");
@@ -453,59 +524,7 @@ export default function App() {
     setMyOrders([]);
   };
 
-  const getMinQty = (prod) => {
-    return Number(prod?.min_quantity || prod?.min_items || 1);
-  };
-
-  const handleAddToCart = (prod, sizeToUse = null) => {
-    if (!currentUser) {
-      setAuthMode('login');
-      setIsAuthOpen(true);
-      return;
-    }
-    const minQ = getMinQty(prod);
-    const finalSize = sizeToUse || selectedSize || 'Standard';
-    setCart(prev => {
-      const idx = prev.findIndex(item => item.id === prod.id && item.size === finalSize);
-      if (idx > -1) {
-        const copy = [...prev];
-        copy[idx].quantity += 1;
-        return copy;
-      }
-      return [...prev, { ...prod, size: finalSize, quantity: minQ }];
-    });
-    alert("Item Cart mein joda gaya!");
-  };
-
-  const handleInitiateBuyNow = (prod) => {
-    if (!currentUser) {
-      setAuthMode('login');
-      setIsAuthOpen(true);
-      return;
-    }
-    const minQ = getMinQty(prod);
-    setCheckoutProduct({ ...prod, quantity: minQ });
-    setSelectedSize(prod.sizes?.[0] || 'M');
-    setIsCheckoutOpen(true);
-  };
-
-  const updateCartQty = (id, size, change) => {
-    setCart(prev => {
-      return prev.map(item => {
-        if (item.id === id && item.size === size) {
-          const minQ = getMinQty(item);
-          const newQty = item.quantity + change;
-          if (newQty < minQ && change < 0) {
-            alert("Aapko kam se kam minimum requirement jitna order karna hoga!");
-            return null;
-          }
-          return newQty > 0 ? { ...item, quantity: newQty } : null;
-        }
-        return item;
-      }).filter(Boolean);
-    });
-  };
-    const handleAllowLocation = () => {
+  const handleAllowLocation = () => {
     if (!navigator.geolocation) {
       setCustomerLocation({ note: "Manual / Default Location", timestamp: new Date().toISOString() });
       return;
@@ -519,7 +538,7 @@ export default function App() {
           latitude: lat,
           longitude: lng,
           accuracy: `${Math.round(pos.coords.accuracy)}m`,
-          mapsUrl: `https://www.google.com/maps?q=${lat},${lng}`,
+          mapsUrl: "https://www.google.com/maps?q=" + lat + "," + lng,
           timestamp: new Date().toISOString()
         });
         setLocLoading(false);
@@ -560,8 +579,7 @@ export default function App() {
     };
     reader.readAsDataURL(file);
   };
-
-  const getCheckoutItems = () => {
+    const getCheckoutItems = () => {
     if (checkoutProduct) {
       return [{ ...checkoutProduct, quantity: checkoutProduct.quantity || getMinQty(checkoutProduct), size: selectedSize || 'Standard' }];
     }
@@ -576,7 +594,7 @@ export default function App() {
   }, 0);
 
   const primaryUpiId = getCheckoutItems()[0]?.upi_id || '9204184716@upi';
-  const upiPayUrl = `upi://pay?pa=${primaryUpiId}&pn=BarijanMart&am=${totalDeliveryFee}&cu=INR`;
+  const upiPayUrl = "upi://pay?pa=" + primaryUpiId + "&pn=BarijanMart&am=" + totalDeliveryFee + "&cu=INR";
 
   const handleExecuteOrder = async () => {
     if (!currentUser) {
@@ -601,7 +619,7 @@ export default function App() {
     const newOrderId = 'BM' + Math.floor(100000 + Math.random() * 900000);
     const orderItems = getCheckoutItems();
 
-    const formattedAddress = `Village: ${currentUser.village}, Ward No: ${currentUser.wardNo}, Panchayat: ${currentUser.panchayat}, PO: ${currentUser.postOffice}, Block: ${currentUser.block}, Dist: ${currentUser.district}, PIN: ${currentUser.pincode}, Phone: ${currentUser.phone}${altPhone.trim() ? `, Alt: ` + altPhone.trim() : ''}`;
+    const formattedAddress = "Village: " + currentUser.village + ", Ward No: " + currentUser.wardNo + ", Panchayat: " + currentUser.panchayat + ", PO: " + currentUser.postOffice + ", Block: " + currentUser.block + ", Dist: " + currentUser.district + ", PIN: " + currentUser.pincode + ", Phone: " + currentUser.phone + (altPhone.trim() ? ", Alt: " + altPhone.trim() : "");
 
     const orderPayload = {
       id: newOrderId,
@@ -644,7 +662,8 @@ export default function App() {
       setIsSubmittingOrder(false);
     }
   };
-    const handleCancelOrder = async (orderId) => {
+
+  const handleCancelOrder = async (orderId) => {
     if (!window.confirm("Kya aap sach mein yeh order cancel karna chahte hain?")) return;
     try {
       const { error } = await supabase
@@ -659,8 +678,7 @@ export default function App() {
       alert("Order cancel karne mein samasya: " + err.message);
     }
   };
-
-  const handleActionSubmit = async (e) => {
+    const handleActionSubmit = async (e) => {
     e.preventDefault();
     if (!actionReason.trim()) {
       return alert("Kripya poora karan batayein!");
@@ -810,7 +828,7 @@ export default function App() {
             </button>
             <button onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
               <ShoppingCart size={17} />
-              {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
+              {cart.length > 0 && <span className="absolute -top-1 right-2 bg-yellow-400 text-slate-900 text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
             </button>
           </div>
         </div>
@@ -1501,8 +1519,7 @@ export default function App() {
           </form>
         </div>
       )}
-
-      {/* 4-Digit BPIN Login, Register & Forgot Password Modal */}
+            {/* 4-Digit BPIN Login, Register & Forgot Password Modal */}
       {isAuthOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
@@ -1648,7 +1665,7 @@ export default function App() {
         </div>
       )}
 
-            {/* Bottom Fixed Navigation Bar */}
+      {/* Bottom Fixed Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
         <button 
           onClick={() => navigateTo('home')} 
@@ -1693,16 +1710,18 @@ export default function App() {
       </nav>
     </div>
   );
-}
-
-                      
+                }
+                  
                     
+                        
+            
                     
+      
+      
+      
+  
     
   
-  
-    
-                
-  
+            
   
   
