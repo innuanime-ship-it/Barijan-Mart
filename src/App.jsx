@@ -4,10 +4,8 @@ import {
   ShoppingBag, Search, Heart, ShoppingCart, User, Package, 
   MapPin, CheckCircle, ArrowLeft, Plus, Minus, Trash2, 
   Clock, ShieldCheck, PhoneCall, ChevronRight, AlertCircle, 
-  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Zap, Edit3, ExternalLink, RefreshCw, XCircle, Menu, X, MessageCircle, Instagram, Facebook
+  Share2, LogOut, Check, Sparkles, Truck, QrCode, Camera, Lock, Key, Zap, Edit3, ExternalLink, RefreshCw, XCircle, Menu, X, MessageCircle, Instagram, Facebook
 } from 'lucide-react';
-
-const FAST2SMS_API_KEY = "qnkJdM9T54jzBpYiu2PRfxCbUhGWDmeE6orNg8lXVwSQcZ1KOFV7IeiJHkEWzQONm5woDdRLCFXj3aA4";
 
 const ALLOWED_VILLAGES = [
   "UttarTola Nadipar Barijan",
@@ -27,12 +25,60 @@ const ALLOWED_VILLAGES = [
   "Kashibari"
 ];
 
+// Number sirf 6, 7, 8, 9 se start ho aur 10 digit ka ho
 const isValidIndianMobile = (num) => {
   const clean = (num || '').replace(/\D/g, '');
   return /^[6-9]\d{9}$/.test(clean);
 };
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  // Navigation History Stack (Back Button Navigation)
+  const [screenStack, setScreenStack] = useState(['home']);
+  const activeTab = screenStack[screenStack.length - 1];
+
+  const navigateTo = (screenName) => {
+    setScreenStack(prev => [...prev, screenName]);
+    window.history.pushState({ screen: screenName }, '');
+  };
+
+  const goBack = () => {
+    if (isCheckoutOpen) {
+      const confirmLeave = window.confirm("⚠️ Kya aap order page se bahar jana chahte hain? Aapka order cancel ho jayega!");
+      if (!confirmLeave) return;
+      setIsCheckoutOpen(false);
+      return;
+    }
+
+    if (screenStack.length > 1) {
+      setScreenStack(prev => prev.slice(0, prev.length - 1));
+    } else {
+      const exitApp = window.confirm("Kya aap Barijan Mart se bahar jana chahte hain?");
+      if (exitApp) {
+        window.history.back();
+      }
+    }
+  };
+    // Mobile Hardware Back Button Listener
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isCheckoutOpen) {
+        const confirmLeave = window.confirm("⚠️ Kya aap order process chhodna chahte hain?");
+        if (!confirmLeave) {
+          window.history.pushState({ screen: 'checkout' }, '');
+          return;
+        }
+        setIsCheckoutOpen(false);
+        return;
+      }
+      if (screenStack.length > 1) {
+        setScreenStack(prev => prev.slice(0, prev.length - 1));
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [screenStack, isCheckoutOpen]);
+
+  // Main Products & Catalog States
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,7 +87,7 @@ export default function App() {
   const [selectedSize, setSelectedSize] = useState('M');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Social Links managed by Admin
+  // Social Links Managed by Admin
   const [socialLinks, setSocialLinks] = useState({
     support_phone: '9204184716',
     whatsapp_url: 'https://wa.me/919204184716',
@@ -53,16 +99,37 @@ export default function App() {
     return JSON.parse(localStorage.getItem('bm_current_customer') || 'null');
   });
 
-  // Auth States: Only Name, Mobile, WhatsApp OTP
+  // BPIN Auth States
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'forgot'
   const [authName, setAuthName] = useState('');
   const [authPhone, setAuthPhone] = useState('');
-  const [authOtpInput, setAuthOtpInput] = useState('');
-  const [serverOtp, setServerOtp] = useState('');
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [sendingOtp, setSendingOtp] = useState(false);
+  const [isPhoneLocked, setIsPhoneLocked] = useState(false);
+  const [authPin, setAuthPin] = useState('');
+  const [newBpin, setNewBpin] = useState('');
 
-  // Profile Address Form State (Detailed Breakdown)
+  // Auto-Fill SIM Hint Handler
+  const handlePhoneBoxClick = async () => {
+    if (isPhoneLocked) return;
+    try {
+      if (navigator.credentials && navigator.credentials.get) {
+        const cred = await navigator.credentials.get({
+          // Native credential request options
+        });
+        if (cred && cred.id) {
+          const clean = cred.id.replace(/\D/g, '').slice(-10);
+          if (isValidIndianMobile(clean)) {
+            setAuthPhone(clean);
+            setIsPhoneLocked(true);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.log("SIM Hint not triggered, manual typing allowed.");
+    }
+  };
+    // Profile Address Form State (15 Gaon Format)
   const [addressForm, setAddressForm] = useState({
     village: currentUser?.village || '',
     wardNo: currentUser?.wardNo || '',
@@ -73,10 +140,13 @@ export default function App() {
     pincode: currentUser?.pincode || ''
   });
   const [isEditingAddress, setIsEditingAddress] = useState(false);
-    const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('bm_cart') || '[]'));
+
+  // Cart, Wishlist and Orders States
+  const [cart, setCart] = useState(() => JSON.parse(localStorage.getItem('bm_cart') || '[]'));
   const [wishlist, setWishlist] = useState(() => JSON.parse(localStorage.getItem('bm_wishlist') || '[]'));
   const [myOrders, setMyOrders] = useState([]);
 
+  // Checkout States
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState(null);
   const [altPhone, setAltPhone] = useState('');
@@ -88,9 +158,9 @@ export default function App() {
 
   // Return & Replacement Modal State
   const [selectedOrderForAction, setSelectedOrderForAction] = useState(null);
-  const [actionType, setActionType] = useState('return'); // 'return' | 'replace'
+  const [actionType, setActionType] = useState('return');
   const [actionReason, setActionReason] = useState('');
-  const [refundMethod, setRefundMethod] = useState('upi'); // 'upi' | 'bank'
+  const [refundMethod, setRefundMethod] = useState('upi');
   const [refundUpi, setRefundUpi] = useState('');
   const [bankDetails, setBankDetails] = useState({ accountNo: '', ifsc: '', holderName: '' });
   const [submittingAction, setSubmittingAction] = useState(false);
@@ -102,6 +172,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bm_wishlist', JSON.stringify(wishlist));
   }, [wishlist]);
+
+  // Wishlist Toggle and Unlist Functions
+  const toggleWishlist = (product) => {
+    setWishlist(prev => {
+      const exists = prev.some(item => item.id === product.id);
+      if (exists) {
+        return prev.filter(item => item.id !== product.id);
+      } else {
+        return [...prev, product];
+      }
+    });
+  };
+
+  const handleUnlistWishlist = (productId) => {
+    setWishlist(prev => prev.filter(item => item.id !== productId));
+    alert("Product ko wishlist se unlist (remove) kar diya gaya!");
+  };
     useEffect(() => {
     fetchCatalog();
     fetchAdminSettings();
@@ -188,113 +275,126 @@ export default function App() {
       console.error("Order fetch error:", err);
     }
   };
-    // Silently Optional Location
-  const handleAllowLocation = () => {
-    if (!navigator.geolocation) {
-      setCustomerLocation({ note: "Manual / Default Location", timestamp: new Date().toISOString() });
-      return;
-    }
-    setLocLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCustomerLocation({
-          latitude: lat,
-          longitude: lng,
-          accuracy: `${Math.round(pos.coords.accuracy)}m`,
-          mapsUrl: `https://www.google.com/maps?q=${lat},${lng}`,
-          timestamp: new Date().toISOString()
-        });
-        setLocLoading(false);
-      },
-      () => {
-        setLocLoading(false);
-        setCustomerLocation({ note: "Manual Location Confirmed", timestamp: new Date().toISOString() });
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-    );
-  };
-
-  // WhatsApp OTP Send
-  const handleSendWhatsAppOtp = async () => {
+    // Registration Handler with 4-Digit BPIN
+  const handleRegisterWithPin = (e) => {
+    e.preventDefault();
     const cleanPhone = authPhone.trim().replace(/\D/g, '');
-    if (!authName.trim()) {
-      return alert("Kripya apna Naam enter karein!");
+    const cleanName = authName.trim().toUpperCase();
+
+    if (!cleanName) {
+      return alert("Kripya apna Pura Naam darj karein!");
     }
     if (!isValidIndianMobile(cleanPhone)) {
-      return alert("Kripya 10-digit ka valid mobile number enter karein!");
+      return alert("Galat Mobile Number! Number sirf 6, 7, 8 ya 9 se shuru hona chahiye aur 10 digit ka hona chahiye.");
+    }
+    if (!/^\d{4}$/.test(authPin.trim())) {
+      return alert("Kripya 4-digit ka valid BPIN banayein (Jaise: 1234)!");
     }
 
-    const generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
-    setServerOtp(generatedCode);
-    setSendingOtp(true);
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const existing = allUsers.find(u => u.phone === cleanPhone);
 
-    try {
-      await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${FAST2SMS_API_KEY}&route=otp&variables_values=${generatedCode}&numbers=${cleanPhone}`);
-      setIsOtpSent(true);
-      alert(`आपके WhatsApp में एक OTP भेजा गया उसे यहां दर्ज करें।`);
-    } catch (err) {
-      setIsOtpSent(true);
-      alert(`आपके WhatsApp में एक OTP भेजा गया उसे यहां दर्ज करें। (Testing Code: ${generatedCode})`);
-    } finally {
-      setSendingOtp(false);
+    if (existing) {
+      return alert("Yeh mobile number pehle se registered hai! Kripya 'Login with BPIN' karein ya PIN bhool gaye toh reset karein.");
+    }
+
+    const newUser = {
+      name: cleanName,
+      phone: cleanPhone,
+      bpin: authPin.trim(),
+      village: '',
+      wardNo: '',
+      panchayat: '',
+      postOffice: '',
+      block: '',
+      district: '',
+      pincode: '',
+      avatar: null,
+      registered_at: new Date().toISOString()
+    };
+
+    allUsers.push(newUser);
+    localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
+    localStorage.setItem('bm_current_customer', JSON.stringify(newUser));
+
+    setCurrentUser(newUser);
+    setIsAuthOpen(false);
+    setAuthPin('');
+    setAuthPhone('');
+    setAuthName('');
+    setIsPhoneLocked(false);
+    alert(`Badhaai ho! Barijan Mart account safalta se ban gaya, ${newUser.name}!`);
+  };
+
+  // Login Handler with Mobile + 4-Digit BPIN
+  const handleLoginWithPin = (e) => {
+    e.preventDefault();
+    const cleanPhone = authPhone.trim().replace(/\D/g, '');
+
+    if (!isValidIndianMobile(cleanPhone)) {
+      return alert("Kripya 10-digit ka valid mobile number darj karein (6, 7, 8, 9 se start)!");
+    }
+    if (!/^\d{4}$/.test(authPin.trim())) {
+      return alert("Kripya apna 4-digit BPIN enter karein!");
+    }
+
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const user = allUsers.find(u => u.phone === cleanPhone);
+
+    if (!user) {
+      return alert("Yeh number registered nahi hai! Kripya pehle 'Naya Khata Banayein (Register)' par tap karein.");
+    }
+
+    if (user.bpin === authPin.trim()) {
+      localStorage.setItem('bm_current_customer', JSON.stringify(user));
+      setCurrentUser(user);
+      setIsAuthOpen(false);
+      setAuthPin('');
+      setAuthPhone('');
+      setIsPhoneLocked(false);
+      alert(`Swagat hai, ${user.name}!`);
+    } else {
+      alert("Galat BPIN! Agar aap PIN bhool gaye hain toh 'Forgot BPIN' par click karein.");
     }
   };
 
-  // Verify OTP and Login
-  const handleVerifyOtp = (e) => {
+  // Forgot BPIN Handler (Account Refresh & Instant Reset)
+  const handleForgotPinReset = (e) => {
     e.preventDefault();
-    if (!authOtpInput.trim()) {
-      return alert("Kripya OTP code enter karein!");
+    const cleanPhone = authPhone.trim().replace(/\D/g, '');
+    const cleanName = authName.trim().toUpperCase();
+
+    if (!cleanName || !isValidIndianMobile(cleanPhone)) {
+      return alert("Kripya apna Registered Name aur Sahi Mobile Number darj karein!");
+    }
+    if (!/^\d{4}$/.test(newBpin.trim())) {
+      return alert("Naya BPIN theek 4-digit ka hona chahiye!");
     }
 
-    if (authOtpInput.trim() === serverOtp || authOtpInput.trim() === '1234') {
-      const cleanPhone = authPhone.trim().replace(/\D/g, '');
-      const cleanName = authName.trim().toUpperCase();
+    const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
+    const index = allUsers.findIndex(u => u.phone === cleanPhone);
 
-      const allUsers = JSON.parse(localStorage.getItem('bm_registered_users') || '[]');
-      let user = allUsers.find(u => u.phone === cleanPhone);
-
-      if (!user) {
-        user = {
-          name: cleanName,
-          phone: cleanPhone,
-          village: '',
-          wardNo: '',
-          panchayat: '',
-          postOffice: '',
-          block: '',
-          district: '',
-          pincode: '',
-          avatar: null,
-          registered_at: new Date().toISOString()
-        };
-        allUsers.push(user);
-        localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
-      } else {
-        user.name = cleanName;
-      }
-
-      localStorage.setItem('bm_current_customer', JSON.stringify(user));
-      setCurrentUser(user);
-      setAddressForm({
-        village: user.village || '',
-        wardNo: user.wardNo || '',
-        panchayat: user.panchayat || '',
-        postOffice: user.postOffice || '',
-        block: user.block || '',
-        district: user.district || '',
-        pincode: user.pincode || ''
-      });
-      setIsAuthOpen(false);
-      setIsOtpSent(false);
-      setAuthOtpInput('');
-      setServerOtp('');
-      alert(`Welcome to Barijan Mart, ${user.name}!`);
-    } else {
-      alert("Galat OTP! Kripya WhatsApp par aaya sahi OTP daalein.");
+    if (index === -1) {
+      return alert("Yeh mobile number database mein nahi mila!");
     }
+
+    if (allUsers[index].name.toUpperCase() !== cleanName) {
+      return alert("Registered Naam match nahi hua! Kripya vahi naam dalein jo khata banate waqt dala tha.");
+    }
+
+    // Update BPIN & Refresh Account
+    allUsers[index].bpin = newBpin.trim();
+    localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
+    localStorage.setItem('bm_current_customer', JSON.stringify(allUsers[index]));
+
+    setCurrentUser(allUsers[index]);
+    setIsAuthOpen(false);
+    setAuthPhone('');
+    setAuthName('');
+    setNewBpin('');
+    setAuthPin('');
+    setIsPhoneLocked(false);
+    alert("Aapka naya BPIN safalta se set ho gaya aur account refresh hokar login ho gaya!");
   };
     // Save Structured Address in Profile
   const handleSaveProfileAddress = (e) => {
@@ -359,6 +459,7 @@ export default function App() {
 
   const handleAddToCart = (prod, sizeToUse = null) => {
     if (!currentUser) {
+      setAuthMode('login');
       setIsAuthOpen(true);
       return;
     }
@@ -378,6 +479,7 @@ export default function App() {
 
   const handleInitiateBuyNow = (prod) => {
     if (!currentUser) {
+      setAuthMode('login');
       setIsAuthOpen(true);
       return;
     }
@@ -403,7 +505,34 @@ export default function App() {
       }).filter(Boolean);
     });
   };
-    const handleSlipUpload = (e) => {
+    const handleAllowLocation = () => {
+    if (!navigator.geolocation) {
+      setCustomerLocation({ note: "Manual / Default Location", timestamp: new Date().toISOString() });
+      return;
+    }
+    setLocLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setCustomerLocation({
+          latitude: lat,
+          longitude: lng,
+          accuracy: `${Math.round(pos.coords.accuracy)}m`,
+          mapsUrl: `https://www.google.com/maps?q=${lat},${lng}`,
+          timestamp: new Date().toISOString()
+        });
+        setLocLoading(false);
+      },
+      () => {
+        setLocLoading(false);
+        setCustomerLocation({ note: "Manual Location Confirmed", timestamp: new Date().toISOString() });
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  };
+
+  const handleSlipUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -446,18 +575,19 @@ export default function App() {
     return acc + fee;
   }, 0);
 
-  const primaryUpiId = getCheckoutItems()[0]?.upi_id || 'barijanmart@upi';
+  const primaryUpiId = getCheckoutItems()[0]?.upi_id || '9204184716@upi';
   const upiPayUrl = `upi://pay?pa=${primaryUpiId}&pn=BarijanMart&am=${totalDeliveryFee}&cu=INR`;
 
   const handleExecuteOrder = async () => {
     if (!currentUser) {
+      setAuthMode('login');
       setIsAuthOpen(true);
       return;
     }
     if (!currentUser.village || !currentUser.wardNo) {
       alert("Kripya profile mein jakar apna pura gaon aur address darj karein!");
       setIsCheckoutOpen(false);
-      setActiveTab('profile');
+      navigateTo('profile');
       return;
     }
     if (totalDeliveryFee > 0 && !paymentScreenshot) {
@@ -505,7 +635,7 @@ export default function App() {
         setPaymentScreenshot(null);
         setCustomerLocation(null);
         setAltPhone('');
-        setActiveTab('orders');
+        navigateTo('orders');
         alert("Aapka Barijan Mart order safalta se book ho gaya!");
       }
     } catch (e) {
@@ -514,8 +644,7 @@ export default function App() {
       setIsSubmittingOrder(false);
     }
   };
-
-  const handleCancelOrder = async (orderId) => {
+    const handleCancelOrder = async (orderId) => {
     if (!window.confirm("Kya aap sach mein yeh order cancel karna chahte hain?")) return;
     try {
       const { error } = await supabase
@@ -530,7 +659,8 @@ export default function App() {
       alert("Order cancel karne mein samasya: " + err.message);
     }
   };
-    const handleActionSubmit = async (e) => {
+
+  const handleActionSubmit = async (e) => {
     e.preventDefault();
     if (!actionReason.trim()) {
       return alert("Kripya poora karan batayein!");
@@ -615,12 +745,12 @@ export default function App() {
               )}
 
               <div className="flex flex-col gap-2">
-                <button onClick={() => { setActiveTab('home'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">🏠 Home Page</button>
-                <button onClick={() => { setActiveTab('orders'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">📦 Mere Orders</button>
-                <button onClick={() => { setActiveTab('profile'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">📍 Manage Village Address</button>
+                <button onClick={() => { navigateTo('home'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">🏠 Home Page</button>
+                <button onClick={() => { navigateTo('orders'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">📦 Mere Orders</button>
+                <button onClick={() => { navigateTo('profile'); setIsDrawerOpen(false); }} className="text-left py-2 px-3 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700">📍 Manage Village Address</button>
               </div>
 
-              {/* Customer Service & Social Links (Set by Admin) */}
+              {/* Customer Service & Social Links */}
               <div className="mt-6 pt-4 border-t border-slate-100">
                 <p className="text-[11px] font-black text-slate-800 mb-2">Customer Service & Socials</p>
                 <div className="flex flex-col gap-2">
@@ -648,19 +778,24 @@ export default function App() {
             </div>
 
             <div className="text-[10px] text-slate-400 text-center border-t pt-3">
-              Barijan Mart v2.4 • Village Commerce
+              Barijan Mart v2.5 • Village Commerce
             </div>
           </div>
         </div>
       )}
-
-      {/* Main Sticky Header */}
+            {/* Main Header with Universal Back Button */}
       <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <button onClick={() => setIsDrawerOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl active:scale-95 transition">
-              <Menu size={20} />
-            </button>
+            {screenStack.length > 1 ? (
+              <button onClick={goBack} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-xl active:scale-95 transition">
+                <ArrowLeft size={19} />
+              </button>
+            ) : (
+              <button onClick={() => setIsDrawerOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl active:scale-95 transition">
+                <Menu size={20} />
+              </button>
+            )}
             <div>
               <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
               <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[150px]">
@@ -669,11 +804,11 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => { if (!currentUser) setIsAuthOpen(true); else setActiveTab('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+            <button onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('wishlist'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
               <Heart size={17} className={wishlist.length > 0 ? "fill-white text-white" : "text-white"} />
               {wishlist.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{wishlist.length}</span>}
             </button>
-            <button onClick={() => { if (!currentUser) setIsAuthOpen(true); else setActiveTab('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
+            <button onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('cart'); }} className="p-2 bg-white/10 hover:bg-white/20 active:scale-95 rounded-full relative transition shadow-sm">
               <ShoppingCart size={17} />
               {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-yellow-400 text-slate-900 text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black shadow">{cart.length}</span>}
             </button>
@@ -691,14 +826,15 @@ export default function App() {
           />
         </div>
       </header>
-            <main className="p-3.5 flex-1">
+
+      <main className="p-3.5 flex-1">
         {activeTab === 'product-detail' && selectedProduct && (
           <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
             <button 
-              onClick={() => setActiveTab('home')} 
+              onClick={goBack} 
               className="mb-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1"
             >
-              <ArrowLeft size={14} /> Back to Products
+              <ArrowLeft size={14} /> Back
             </button>
 
             <div className="w-full bg-slate-100 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200">
@@ -730,7 +866,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Price & Minimum Items Calculation Section */}
               <div className="mt-4 p-3 bg-red-50/50 rounded-2xl border border-red-100">
                 <div className="flex items-baseline gap-2.5">
                   <span className="font-black text-2xl text-red-700">₹{selectedProduct.price}</span>
@@ -775,7 +910,7 @@ export default function App() {
             </div>
           </div>
         )}
-                      {activeTab === 'home' && (
+                {activeTab === 'home' && (
           <div>
             <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-2">
@@ -815,7 +950,7 @@ export default function App() {
                   const discountPercent = p.mrp > p.price ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
                   return (
                     <div key={p.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition group">
-                      <div className="relative cursor-pointer overflow-hidden bg-slate-50" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); setActiveTab('product-detail'); }}>
+                      <div className="relative cursor-pointer overflow-hidden bg-slate-50" onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); navigateTo('product-detail'); }}>
                         <img src={p.images?.[0] || 'https://via.placeholder.com/200'} alt={p.title} className="w-full h-36 object-contain bg-slate-100 group-hover:scale-105 transition duration-300" />
                         {discountPercent > 0 && (
                           <span className="absolute top-2 left-2 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow">
@@ -835,7 +970,7 @@ export default function App() {
                         </button>
                       </div>
                       <div className="p-2.5 flex flex-col flex-1 justify-between">
-                        <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); setActiveTab('product-detail'); }} className="cursor-pointer">
+                        <div onClick={() => { setSelectedProduct(p); setSelectedSize(p.sizes?.[0] || 'M'); navigateTo('product-detail'); }} className="cursor-pointer">
                           <h3 className="font-bold text-xs text-slate-900 truncate">{p.title}</h3>
                           <div className="flex items-baseline gap-1 mt-1">
                             <span className="font-black text-sm text-red-700">₹{p.price}</span>
@@ -855,13 +990,14 @@ export default function App() {
           </div>
         )}
 
+        {/* Cart Screen */}
         {activeTab === 'cart' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-red-700" /> Aapka Cart ({cart.length})</h2>
             {cart.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-3xl p-6 border border-slate-200">
                 <ShoppingCart size={40} className="mx-auto text-slate-300 mb-2" /><p className="text-xs font-bold text-slate-400">Aapka cart khaali hai</p>
-                <button onClick={() => setActiveTab('home')} className="mt-4 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
+                <button onClick={() => navigateTo('home')} className="mt-4 px-4 py-2 bg-red-700 text-white text-xs font-bold rounded-xl shadow-md">Shopping Shuru Karein</button>
               </div>
             ) : (
               <div className="flex flex-col gap-3">
@@ -896,15 +1032,23 @@ export default function App() {
           </div>
         )}
 
+        {/* Wishlist Screen with Unlist Option */}
         {activeTab === 'wishlist' && (
           <div>
-            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-red-600 fill-red-600" /> Wishlist</h2>
+            <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Heart size={16} className="text-red-600 fill-red-600" /> Wishlist ({wishlist.length})</h2>
             {wishlist.length === 0 ? (
               <p className="text-center py-20 text-xs font-bold text-slate-400">Wishlist mein koi product nahi hai.</p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 {wishlist.map(p => (
-                  <div key={p.id} className="bg-white rounded-2xl border p-2.5 shadow-sm">
+                  <div key={p.id} className="bg-white rounded-2xl border p-2.5 shadow-sm relative flex flex-col justify-between">
+                    <button 
+                      onClick={() => handleUnlistWishlist(p.id)}
+                      className="absolute top-2 right-2 p-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-full shadow-xs transition"
+                      title="Wishlist se unlist karein"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                     <img src={p.images?.[0]} className="w-full h-28 object-contain rounded-xl bg-slate-50" />
                     <h4 className="font-bold text-xs truncate mt-2">{p.title}</h4>
                     <p className="font-black text-xs text-red-700">₹{p.price}</p>
@@ -915,7 +1059,7 @@ export default function App() {
             )}
           </div>
         )}
-                      {/* Orders with Cancel & Return / Replacement Actions */}
+                {/* Orders Screen */}
         {activeTab === 'orders' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><Package size={16} className="text-red-700" /> Mere Orders</h2>
@@ -994,7 +1138,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Profile Tab with Comprehensive Village & Address Form */}
+        {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
             <h2 className="text-sm font-black text-slate-900">User Profile</h2>
@@ -1021,7 +1165,6 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Structured Address Container */}
                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-black text-xs text-slate-900 flex items-center gap-1.5"><MapPin size={13} className="text-red-700" /> Saved Delivery Address</span>
@@ -1123,21 +1266,21 @@ export default function App() {
             ) : (
               <div className="text-center py-6">
                 <p className="text-xs text-slate-500 mb-4">Fast delivery ke liye apna mobile number verify karein.</p>
-                <button onClick={() => setIsAuthOpen(true)} className="w-full py-2.5 bg-red-700 text-white font-bold text-xs rounded-xl shadow-md">
-                  Login / Register via WhatsApp OTP
+                <button onClick={() => { setAuthMode('login'); setIsAuthOpen(true); }} className="w-full py-2.5 bg-red-700 text-white font-bold text-xs rounded-xl shadow-md">
+                  Login / Register via 4-Digit BPIN
                 </button>
               </div>
             )}
           </div>
         )}
       </main>
-            {/* Checkout Screen with Selectable/Locked Address */}
+            {/* Checkout Screen with Back-Warning Protection */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
             <div className="flex justify-between items-center border-b pb-3 mb-3">
               <h3 className="font-black text-sm text-slate-900">Order Delivery Details</h3>
-              <button onClick={() => setIsCheckoutOpen(false)} className="text-slate-400 font-black text-sm">✕</button>
+              <button onClick={goBack} className="text-slate-400 font-black text-sm">✕</button>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -1157,11 +1300,10 @@ export default function App() {
                 })}
               </div>
 
-              {/* Locked / Selectable Non-Editable Delivery Address */}
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs">
                 <div className="flex justify-between items-center mb-1">
                   <span className="font-black text-slate-900">Delivery Address (Locked):</span>
-                  <button onClick={() => { setIsCheckoutOpen(false); setActiveTab('profile'); }} className="text-red-700 text-[10px] font-bold underline">Change in Profile</button>
+                  <button onClick={() => { setIsCheckoutOpen(false); navigateTo('profile'); }} className="text-red-700 text-[10px] font-bold underline">Change in Profile</button>
                 </div>
                 {currentUser?.village ? (
                   <div className="text-slate-800 leading-relaxed font-medium">
@@ -1187,7 +1329,6 @@ export default function App() {
                 />
               </div>
 
-              {/* Location Secretly Optional */}
               <div className="my-1">
                 {!customerLocation ? (
                   <button
@@ -1255,88 +1396,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Clean WhatsApp OTP Modal: Name, Mobile, Verify OTP Only */}
-      {isAuthOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
-            <h3 className="font-black text-sm text-slate-900 text-center">Barijan Mart Customer Verification</h3>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-600 block mb-1">Apna Naam *</label>
-              <input 
-                type="text" 
-                placeholder="Full Name (CAPITAL) *" 
-                value={authName} 
-                onChange={e => setAuthName(e.target.value.toUpperCase())} 
-                className="w-full px-3 py-2 text-xs border rounded-xl font-bold uppercase tracking-wide" 
-              />
-            </div>
-
-            <div>
-              <label className="text-[10px] font-bold text-slate-600 block mb-1">Mobile Number *</label>
-              <input 
-                type="tel" 
-                maxLength={10}
-                placeholder="10-Digit Mobile Number *" 
-                value={authPhone} 
-                onChange={e => setAuthPhone(e.target.value.replace(/\D/g, ''))} 
-                className="w-full px-3 py-2 text-xs border rounded-xl font-mono" 
-              />
-            </div>
-
-            {!isOtpSent ? (
-              <button 
-                type="button" 
-                onClick={handleSendWhatsAppOtp}
-                disabled={sendingOtp}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95 flex items-center justify-center gap-1.5 mt-1"
-              >
-                <span>🟢</span>
-                {sendingOtp ? "OTP Bheja Ja Raha..." : "Verify OTP via WhatsApp"}
-              </button>
-            ) : (
-              <form onSubmit={handleVerifyOtp} className="flex flex-col gap-2.5 mt-1">
-                <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
-                  <p className="text-[11px] font-bold text-emerald-800 leading-tight">
-                    आपके WhatsApp में एक OTP भेजा गया उसे यहां दर्ज करें
-                  </p>
-                </div>
-                <input 
-                  type="text" 
-                  maxLength={6}
-                  placeholder="Enter WhatsApp OTP *" 
-                  value={authOtpInput} 
-                  onChange={e => setAuthOtpInput(e.target.value.replace(/\D/g, ''))} 
-                  className="w-full px-3 py-2 text-center font-mono text-base font-black tracking-widest border border-emerald-400 rounded-xl bg-white" 
-                />
-                <button 
-                  type="submit" 
-                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95"
-                >
-                  ✓ Login / Register Confirm
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setIsOtpSent(false)} 
-                  className="text-[10px] text-slate-500 font-bold underline text-center"
-                >
-                  Number Badlein ya Dobara Bhejein
-                </button>
-              </form>
-            )}
-
-            <button 
-              type="button" 
-              onClick={() => { setIsAuthOpen(false); setIsOtpSent(false); }} 
-              className="text-xs text-slate-400 font-bold text-center mt-1"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Return & Replacement Modal with Hindi Options & Refund Details */}
+      {/* Return & Replacement Modal */}
       {selectedOrderForAction && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
           <form onSubmit={handleActionSubmit} className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3 max-h-[90vh] overflow-y-auto">
@@ -1380,7 +1440,6 @@ export default function App() {
               />
             </div>
 
-            {/* Refund Options if "वापस करना है" */}
             {actionType === 'return' && (
               <div className="p-3 bg-red-50/60 rounded-2xl border border-red-200 flex flex-col gap-2">
                 <span className="text-[11px] font-black text-slate-800">Refund lene ka tarika chunein:</span>
@@ -1455,41 +1514,211 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom Navigation Bar */}
+      {/* 4-Digit BPIN Login, Register & Forgot Password Modal */}
+      {isAuthOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
+            <h3 className="font-black text-sm text-slate-900 text-center">
+              {authMode === 'register' ? 'Barijan Mart Naya Registration' : authMode === 'forgot' ? 'Forgot BPIN & Refresh' : 'Barijan Mart BPIN Login'}
+            </h3>
+
+            {(authMode === 'register' || authMode === 'forgot') && (
+              <div>
+                <label className="text-[10px] font-bold text-slate-600 block mb-1">Apna Pura Naam *</label>
+                <input 
+                  type="text" 
+                  placeholder="Full Name (CAPITAL) *" 
+                  value={authName} 
+                  onChange={e => setAuthName(e.target.value.toUpperCase())} 
+                  className="w-full px-3 py-2 text-xs border rounded-xl font-bold uppercase tracking-wide" 
+                />
+              </div>
+            )}
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[10px] font-bold text-slate-600">Mobile Number (6,7,8,9 se start) *</label>
+                {isPhoneLocked && (
+                  <button type="button" onClick={() => setIsPhoneLocked(false)} className="text-[9px] text-red-600 font-bold underline">
+                    Edit Number
+                  </button>
+                )}
+              </div>
+              <input 
+                type="tel" 
+                maxLength={10}
+                placeholder="10-Digit Mobile Number *" 
+                value={authPhone} 
+                onClick={handlePhoneBoxClick}
+                readOnly={isPhoneLocked}
+                onChange={e => setAuthPhone(e.target.value.replace(/\D/g, ''))} 
+                className={`w-full px-3 py-2 text-xs border rounded-xl font-mono transition ${
+                  isPhoneLocked ? 'bg-slate-100 text-slate-500 font-bold cursor-not-allowed' : 'bg-white'
+                }`}
+              />
+              {isPhoneLocked && (
+                <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
+                  ✓ SIM number locked (Fake number blocked)
+                </span>
+              )}
+            </div>
+
+            {authMode === 'register' && (
+              <form onSubmit={handleRegisterWithPin} className="flex flex-col gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Create 4-Digit BPIN *</label>
+                  <input 
+                    type="password" 
+                    maxLength={4}
+                    placeholder="Enter 4-Digit Secret PIN" 
+                    value={authPin} 
+                    onChange={e => setAuthPin(e.target.value.replace(/\D/g, ''))} 
+                    className="w-full px-3 py-2 text-center font-mono text-base font-black tracking-widest border rounded-xl" 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  ✓ Register Karein
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => { setAuthMode('login'); setIsPhoneLocked(false); }} 
+                  className="text-[10px] text-slate-500 font-bold underline text-center"
+                >
+                  Pehle se account hai? Login karein
+                </button>
+              </form>
+            )}
+
+            {authMode === 'login' && (
+              <form onSubmit={handleLoginWithPin} className="flex flex-col gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Enter 4-Digit BPIN *</label>
+                  <input 
+                    type="password" 
+                    maxLength={4}
+                    placeholder="Enter 4-Digit BPIN" 
+                    value={authPin} 
+                    onChange={e => setAuthPin(e.target.value.replace(/\D/g, ''))} 
+                    className="w-full px-3 py-2 text-center font-mono text-base font-black tracking-widest border rounded-xl" 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full py-2.5 bg-red-700 hover:bg-red-800 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  ✓ Login Karein
+                </button>
+                <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 px-1 mt-1">
+                  <button type="button" onClick={() => { setAuthMode('register'); setIsPhoneLocked(false); }} className="underline text-red-700">
+                    Naya Khata Banayein
+                  </button>
+                  <button type="button" onClick={() => { setAuthMode('forgot'); setIsPhoneLocked(false); }} className="underline text-slate-600">
+                    Forgot BPIN?
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {authMode === 'forgot' && (
+              <form onSubmit={handleForgotPinReset} className="flex flex-col gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Set Naya 4-Digit BPIN *</label>
+                  <input 
+                    type="password" 
+                    maxLength={4}
+                    placeholder="Enter Naya 4-Digit BPIN" 
+                    value={newBpin} 
+                    onChange={e => setNewBpin(e.target.value.replace(/\D/g, ''))} 
+                    className="w-full px-3 py-2 text-center font-mono text-base font-black tracking-widest border rounded-xl" 
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95"
+                >
+                  ✓ BPIN Reset & Refresh Account
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => { setAuthMode('login'); setIsPhoneLocked(false); }} 
+                  className="text-[10px] text-slate-500 font-bold underline text-center"
+                >
+                  Wapas Login Par Jayein
+                </button>
+              </form>
+            )}
+
+            <button 
+              type="button" 
+              onClick={() => { setIsAuthOpen(false); setIsPhoneLocked(false); }} 
+              className="text-xs text-slate-400 font-bold text-center mt-1"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+            {/* Bottom Fixed Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
-        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'home' || activeTab === 'product-detail' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+        <button 
+          onClick={() => navigateTo('home')} 
+          className={"flex flex-col items-center gap-0.5 " + (activeTab === 'home' || activeTab === 'product-detail' ? 'text-red-700 font-bold' : 'text-slate-400')}
+        >
           <ShoppingBag size={18} />
           <span className="text-[10px]">Home</span>
         </button>
-        <button onClick={() => { if (!currentUser) setIsAuthOpen(true); else setActiveTab('wishlist'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'wishlist' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+
+        <button 
+          onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('wishlist'); }} 
+          className={"flex flex-col items-center gap-0.5 " + (activeTab === 'wishlist' ? 'text-red-700 font-bold' : 'text-slate-400')}
+        >
           <Heart size={18} />
           <span className="text-[10px]">Wishlist</span>
         </button>
-        <button onClick={() => { if (!currentUser) setIsAuthOpen(true); else setActiveTab('cart'); }} className={`flex flex-col items-center gap-0.5 relative ${activeTab === 'cart' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+
+        <button 
+          onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('cart'); }} 
+          className={"flex flex-col items-center gap-0.5 relative " + (activeTab === 'cart' ? 'text-red-700 font-bold' : 'text-slate-400')}
+        >
           <ShoppingCart size={18} />
           {cart.length > 0 && <span className="absolute -top-1 right-2 bg-yellow-400 text-slate-900 text-[8px] w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold">{cart.length}</span>}
           <span className="text-[10px]">Cart</span>
         </button>
-        <button onClick={() => { if (!currentUser) setIsAuthOpen(true); else setActiveTab('orders'); }} className={`flex flex-col items-center gap-0.5 ${activeTab === 'orders' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+
+        <button 
+          onClick={() => { if (!currentUser) { setAuthMode('login'); setIsAuthOpen(true); } else navigateTo('orders'); }} 
+          className={"flex flex-col items-center gap-0.5 " + (activeTab === 'orders' ? 'text-red-700 font-bold' : 'text-slate-400')}
+        >
           <Package size={18} />
           <span className="text-[10px]">Orders</span>
         </button>
-        <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 ${activeTab === 'profile' ? 'text-red-700 font-bold' : 'text-slate-400'}`}>
+
+        <button 
+          onClick={() => navigateTo('profile')} 
+          className={"flex flex-col items-center gap-0.5 " + (activeTab === 'profile' ? 'text-red-700 font-bold' : 'text-slate-400')}
+        >
           <User size={18} />
           <span className="text-[10px]">Profile</span>
         </button>
       </nav>
     </div>
   );
-                }
-                
-                      
-                          
-              
+}
+
+            
+
       
-        
-                    
-        
+                      
+            
+                                             
+          
+      
+                                 
     
-    
+                              
+  
+  
   
