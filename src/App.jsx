@@ -323,7 +323,7 @@ export default function App() {
     setAuthPhone('');
     setAuthName('');
     setIsPhoneLocked(false);
-    alert(`Badhaai ho! Barijan Mart account safalta se ban gaya, ${newUser.name}!`);
+    alert("Badhaai ho! Barijan Mart account safalta se ban gaya!");
   };
 
   // Login Handler with Mobile + 4-Digit BPIN
@@ -352,7 +352,7 @@ export default function App() {
       setAuthPin('');
       setAuthPhone('');
       setIsPhoneLocked(false);
-      alert(`Swagat hai, ${user.name}!`);
+      alert("Swagat hai! Login safal raha.");
     } else {
       alert("Galat BPIN! Agar aap PIN bhool gaye hain toh 'Forgot BPIN' par click karein.");
     }
@@ -474,7 +474,7 @@ export default function App() {
       }
       return [...prev, { ...prod, size: finalSize, quantity: minQ }];
     });
-    alert(`${minQ > 1 ? minQ + ' Items' : 'Item'} Cart mein joda gaya!`);
+    alert("Item Cart mein joda gaya!");
   };
 
   const handleInitiateBuyNow = (prod) => {
@@ -496,7 +496,7 @@ export default function App() {
           const minQ = getMinQty(item);
           const newQty = item.quantity + change;
           if (newQty < minQ && change < 0) {
-            alert(`Aapko kam se kam ${minQ} product order karna hoga!`);
+            alert("Aapko kam se kam minimum requirement jitna order karna hoga!");
             return null;
           }
           return newQty > 0 ? { ...item, quantity: newQty } : null;
@@ -701,7 +701,7 @@ export default function App() {
         return_info: returnPayload
       } : o));
 
-      alert(`${actionType === 'return' ? 'Return' : 'Replacement'} request bhej di gayi hai! BMart Admin iski janch karega.`);
+      alert("Request bhej di gayi hai! BMart Admin iski janch karega.");
       setSelectedOrderForAction(null);
       setActionReason('');
       setRefundUpi('');
@@ -754,7 +754,7 @@ export default function App() {
               <div className="mt-6 pt-4 border-t border-slate-100">
                 <p className="text-[11px] font-black text-slate-800 mb-2">Customer Service & Socials</p>
                 <div className="flex flex-col gap-2">
-                  <a href={`tel:${socialLinks.support_phone}`} className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700">
+                  <a href={"tel:" + socialLinks.support_phone} className="flex items-center gap-2 p-2 bg-slate-50 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700">
                     <PhoneCall size={14} className="text-red-700" />
                     <span>Call Care: {socialLinks.support_phone}</span>
                   </a>
@@ -799,7 +799,7 @@ export default function App() {
             <div>
               <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
               <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[150px]">
-                {currentUser ? `📍 ${currentUser.village || 'Barijan'}` : "⚡ Direct Village Doorstep"}
+                {currentUser ? "📍 " + (currentUser.village || 'Barijan') : "⚡ Direct Village Doorstep"}
               </p>
             </div>
           </div>
@@ -856,9 +856,7 @@ export default function App() {
                     <button 
                       key={s} 
                       onClick={() => setSelectedSize(s)} 
-                      className={`px-3 py-1 rounded-xl text-xs font-bold border transition ${
-                        selectedSize === s ? 'bg-red-700 text-white border-red-700 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200'
-                      }`}
+                      className={"px-3 py-1 rounded-xl text-xs font-bold border transition " + (selectedSize === s ? 'bg-red-700 text-white border-red-700 shadow-sm' : 'bg-slate-50 text-slate-700 border-slate-200')}
                     >
                       {s}
                     </button>
@@ -872,7 +870,7 @@ export default function App() {
                   <span className="text-xs text-slate-500 font-bold">/ item</span>
                   {selectedProduct.mrp > selectedProduct.price && <span className="text-sm text-slate-400 line-through">₹{selectedProduct.mrp}</span>}
                   <span className="text-xs font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md">
-                    Delivery: {selectedProduct.delivery_fee > 0 ? `₹${selectedProduct.delivery_fee}` : 'Free'}
+                    Delivery: {selectedProduct.delivery_fee > 0 ? "₹" + selectedProduct.delivery_fee : 'Free'}
                   </span>
                 </div>
 
@@ -928,9 +926,7 @@ export default function App() {
                 <button
                   key={c}
                   onClick={() => setSelectedCategory(c)}
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition shadow-sm ${
-                    selectedCategory === c ? 'bg-red-700 text-white shadow-red-700/20' : 'bg-white text-slate-700 border border-slate-200'
-                  }`}
+                  className={"px-3.5 py-1.5 rounded-full text-xs font-black whitespace-nowrap transition shadow-sm " + (selectedCategory === c ? 'bg-red-700 text-white shadow-red-700/20' : 'bg-white text-slate-700 border border-slate-200')}
                 >
                   {c}
                 </button>
@@ -1084,11 +1080,11 @@ export default function App() {
                           <span className="font-black text-xs text-red-700">#{o.id}</span>
                           <p className="text-[10px] text-slate-400">{formattedDate}</p>
                         </div>
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full ${
+                        <span className={"text-[10px] font-black px-2.5 py-1 rounded-full " + (
                           o.status === 'Cancel Approved' || o.status === 'Cancelled' ? 'bg-rose-100 text-rose-700' :
                           o.status === 'Delivered' ? 'bg-emerald-100 text-emerald-700' :
-                          o.status?.includes('Requested') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                        }`}>
+                          o.status && o.status.includes('Requested') ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                        )}>
                           {o.status || 'Order Placed'}
                         </span>
                       </div>
@@ -1121,7 +1117,7 @@ export default function App() {
                           </button>
                         )}
 
-                        {isDelivered && !o.status?.includes('Requested') && (
+                        {isDelivered && !(o.status && o.status.includes('Requested')) && (
                           <button
                             onClick={() => { setSelectedOrderForAction(o); setActionType('return'); }}
                             className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[11px] rounded-xl flex items-center justify-center gap-1 transition"
@@ -1363,7 +1359,7 @@ export default function App() {
 
                     <p className="text-[10px] text-slate-500 mb-2">Ya QR code scan karein:</p>
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(upiPayUrl)}`} 
+                      src={"https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent(upiPayUrl)} 
                       alt="UPI QR" 
                       className="mx-auto w-32 h-32 rounded-lg border p-1 bg-white" 
                     />
@@ -1410,18 +1406,14 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setActionType('return')}
-                className={`py-2.5 px-3 rounded-xl font-bold text-xs border text-center transition ${
-                  actionType === 'return' ? 'bg-red-700 text-white border-red-700 shadow' : 'bg-slate-50 text-slate-700 border-slate-200'
-                }`}
+                className={"py-2.5 px-3 rounded-xl font-bold text-xs border text-center transition " + (actionType === 'return' ? 'bg-red-700 text-white border-red-700 shadow' : 'bg-slate-50 text-slate-700 border-slate-200')}
               >
                 * वापस करना है
               </button>
               <button
                 type="button"
                 onClick={() => setActionType('replace')}
-                className={`py-2.5 px-3 rounded-xl font-bold text-xs border text-center transition ${
-                  actionType === 'replace' ? 'bg-red-700 text-white border-red-700 shadow' : 'bg-slate-50 text-slate-700 border-slate-200'
-                }`}
+                className={"py-2.5 px-3 rounded-xl font-bold text-xs border text-center transition " + (actionType === 'replace' ? 'bg-red-700 text-white border-red-700 shadow' : 'bg-slate-50 text-slate-700 border-slate-200')}
               >
                 * बदलना है
               </button>
@@ -1447,18 +1439,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setRefundMethod('upi')}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                      refundMethod === 'upi' ? 'bg-red-700 text-white border-red-700' : 'bg-white text-slate-700 border-slate-200'
-                    }`}
+                    className={"flex-1 py-1.5 rounded-lg text-xs font-bold border transition " + (refundMethod === 'upi' ? 'bg-red-700 text-white border-red-700' : 'bg-white text-slate-700 border-slate-200')}
                   >
                     UPI Through
                   </button>
                   <button
                     type="button"
                     onClick={() => setRefundMethod('bank')}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition ${
-                      refundMethod === 'bank' ? 'bg-red-700 text-white border-red-700' : 'bg-white text-slate-700 border-slate-200'
-                    }`}
+                    className={"flex-1 py-1.5 rounded-lg text-xs font-bold border transition " + (refundMethod === 'bank' ? 'bg-red-700 text-white border-red-700' : 'bg-white text-slate-700 border-slate-200')}
                   >
                     Bank Account Through
                   </button>
@@ -1552,9 +1540,7 @@ export default function App() {
                 onClick={handlePhoneBoxClick}
                 readOnly={isPhoneLocked}
                 onChange={e => setAuthPhone(e.target.value.replace(/\D/g, ''))} 
-                className={`w-full px-3 py-2 text-xs border rounded-xl font-mono transition ${
-                  isPhoneLocked ? 'bg-slate-100 text-slate-500 font-bold cursor-not-allowed' : 'bg-white'
-                }`}
+                className={"w-full px-3 py-2 text-xs border rounded-xl font-mono transition " + (isPhoneLocked ? 'bg-slate-100 text-slate-500 font-bold cursor-not-allowed' : 'bg-white')}
               />
               {isPhoneLocked && (
                 <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
@@ -1661,6 +1647,7 @@ export default function App() {
           </div>
         </div>
       )}
+
             {/* Bottom Fixed Navigation Bar */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 flex justify-around py-2.5 z-40">
         <button 
@@ -1708,17 +1695,14 @@ export default function App() {
   );
 }
 
-            
-
-      
                       
-            
-                                             
-          
-      
-                                 
+                    
+                    
     
-                              
+  
+  
+    
+                
   
   
   
