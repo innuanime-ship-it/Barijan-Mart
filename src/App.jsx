@@ -25,17 +25,18 @@ const ALLOWED_VILLAGES = [
   "Kashibari"
 ];
 
-// Number sirf 6, 7, 8, 9 se start ho aur 10 digit ka ho
+// Background validation: Number sirf 6, 7, 8, 9 se start ho aur 10 digit ka ho
 const isValidIndianMobile = (num) => {
   const clean = (num || '').replace(/\D/g, '');
   return /^[6-9]\d{9}$/.test(clean);
 };
 
 export default function App() {
-  // 1. Saare States Shuruat Mein Hi Declare Honge (Crash Fix)
+  // 1. Saare States Shuruat Mein Hi Declare Honge (Crash-Free Order)
   const [screenStack, setScreenStack] = useState(['home']);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutProduct, setCheckoutProduct] = useState(null);
+  const [lastBackPress, setLastBackPress] = useState(0);
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -108,10 +109,11 @@ export default function App() {
   const [paymentScreenshot, setPaymentScreenshot] = useState(null);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
-  // Return & Replacement Modal State
+  // Return & Replacement Modal State (With Image Upload)
   const [selectedOrderForAction, setSelectedOrderForAction] = useState(null);
   const [actionType, setActionType] = useState('return');
   const [actionReason, setActionReason] = useState('');
+  const [actionImage, setActionImage] = useState(null); // Return item photo state
   const [refundMethod, setRefundMethod] = useState('upi');
   const [refundUpi, setRefundUpi] = useState('');
   const [bankDetails, setBankDetails] = useState({ accountNo: '', ifsc: '', holderName: '' });
@@ -122,10 +124,9 @@ export default function App() {
 
   const navigateTo = (screenName) => {
     setScreenStack(prev => [...prev, screenName]);
-    window.history.pushState({ screen: screenName }, '');
+    window.history.pushState({ page: 'barijan', screen: screenName }, '');
   };
 
-  // Safety alias taaki purane buttons se crash na ho
   const setActiveTab = (screenName) => navigateTo(screenName);
 
   const goBack = () => {
@@ -139,33 +140,61 @@ export default function App() {
     if (screenStack.length > 1) {
       setScreenStack(prev => prev.slice(0, prev.length - 1));
     } else {
-      const exitApp = window.confirm("Kya aap Barijan Mart se bahar jana chahte hain?");
-      if (exitApp) {
-        window.history.back();
-      }
+      setScreenStack(['home']);
     }
   };
-
-  // Mobile Hardware Back Button Listener
+    // Smart Phone Hardware Back Button Handler
   useEffect(() => {
+    window.history.pushState({ page: 'barijan' }, '');
+
     const handlePopState = () => {
+      // 1. Agar checkout khula hai toh warning
       if (isCheckoutOpen) {
         const confirmLeave = window.confirm("⚠️ Kya aap order process chhodna chahte hain?");
         if (!confirmLeave) {
-          window.history.pushState({ screen: 'checkout' }, '');
+          window.history.pushState({ page: 'barijan' }, '');
           return;
         }
         setIsCheckoutOpen(false);
+        window.history.pushState({ page: 'barijan' }, '');
         return;
       }
-      if (screenStack.length > 1) {
-        setScreenStack(prev => prev.slice(0, prev.length - 1));
+
+      // 2. Agar koi popup modal khula hai toh use band karo
+      if (isAuthOpen) {
+        setIsAuthOpen(false);
+        window.history.pushState({ page: 'barijan' }, '');
+        return;
+      }
+      if (selectedOrderForAction) {
+        setSelectedOrderForAction(null);
+        window.history.pushState({ page: 'barijan' }, '');
+        return;
+      }
+
+      // 3. Kisi bhi screen par hon toh seedha Home page par aao
+      if (activeTab !== 'home') {
+        setScreenStack(['home']);
+        window.history.pushState({ page: 'barijan' }, '');
+        return;
+      }
+
+      // 4. Agar Home screen par hain toh 2 baar dabane par hi exit ho
+      const now = Date.now();
+      if (now - lastBackPress < 2500) {
+        window.history.back(); // App exit
+      } else {
+        setLastBackPress(now);
+        alert("App band karne ke liye ek baar aur back button dabayein.");
+        window.history.pushState({ page: 'barijan' }, '');
       }
     };
+
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [screenStack, isCheckoutOpen]);
-    // Auto-Fill SIM Hint Handler
+  }, [activeTab, isCheckoutOpen, isAuthOpen, selectedOrderForAction, lastBackPress]);
+
+  // Auto-Fill SIM Hint Handler
   const handlePhoneBoxClick = async () => {
     if (isPhoneLocked) return;
     try {
@@ -185,7 +214,36 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
+  // Return Photo File Upload & Compression
+  const handleReturnPhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxDim = 800;
+        let w = img.width;
+        let h = img.height;
+        if (w > h && w > maxDim) {
+          h *= maxDim / w;
+          w = maxDim;
+        } else if (h > maxDim) {
+          w *= maxDim / h;
+          h = maxDim;
+        }
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        setActionImage(canvas.toDataURL('image/jpeg', 0.65));
+      };
+      img.src = re.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+    useEffect(() => {
     localStorage.setItem('bm_cart', JSON.stringify(cart));
   }, [cart]);
 
@@ -246,7 +304,8 @@ export default function App() {
       supabase.removeChannel(settingsChannel);
     };
   }, [currentUser]);
-    const fetchAdminSettings = async () => {
+
+  const fetchAdminSettings = async () => {
     try {
       const { data, error } = await supabase.from('app_settings').select('*').single();
       if (!error && data) {
@@ -295,59 +354,6 @@ export default function App() {
       console.error("Order fetch error:", err);
     }
   };
-
-  const getMinQty = (prod) => {
-    return Number(prod?.min_quantity || prod?.min_items || 1);
-  };
-
-  const handleAddToCart = (prod, sizeToUse = null) => {
-    if (!currentUser) {
-      setAuthMode('login');
-      setIsAuthOpen(true);
-      return;
-    }
-    const minQ = getMinQty(prod);
-    const finalSize = sizeToUse || selectedSize || 'Standard';
-    setCart(prev => {
-      const idx = prev.findIndex(item => item.id === prod.id && item.size === finalSize);
-      if (idx > -1) {
-        const copy = [...prev];
-        copy[idx].quantity += 1;
-        return copy;
-      }
-      return [...prev, { ...prod, size: finalSize, quantity: minQ }];
-    });
-    alert("Item Cart mein joda gaya!");
-  };
-
-  const handleInitiateBuyNow = (prod) => {
-    if (!currentUser) {
-      setAuthMode('login');
-      setIsAuthOpen(true);
-      return;
-    }
-    const minQ = getMinQty(prod);
-    setCheckoutProduct({ ...prod, quantity: minQ });
-    setSelectedSize(prod.sizes?.[0] || 'M');
-    setIsCheckoutOpen(true);
-  };
-
-  const updateCartQty = (id, size, change) => {
-    setCart(prev => {
-      return prev.map(item => {
-        if (item.id === id && item.size === size) {
-          const minQ = getMinQty(item);
-          const newQty = item.quantity + change;
-          if (newQty < minQ && change < 0) {
-            alert("Aapko kam se kam minimum requirement jitna order karna hoga!");
-            return null;
-          }
-          return newQty > 0 ? { ...item, quantity: newQty } : null;
-        }
-        return item;
-      }).filter(Boolean);
-    });
-  };
     // Registration Handler with 4-Digit BPIN
   const handleRegisterWithPin = (e) => {
     e.preventDefault();
@@ -368,7 +374,7 @@ export default function App() {
     const existing = allUsers.find(u => u.phone === cleanPhone);
 
     if (existing) {
-      return alert("Yeh mobile number pehle se registered hai! Kripya 'Login with BPIN' karein ya PIN bhool gaye toh reset karein.");
+      return alert("Yeh mobile number pehle se registered hai! Kripya 'Login' karein ya PIN bhool gaye toh reset karein.");
     }
 
     const newUser = {
@@ -405,7 +411,7 @@ export default function App() {
     const cleanPhone = authPhone.trim().replace(/\D/g, '');
 
     if (!isValidIndianMobile(cleanPhone)) {
-      return alert("Kripya 10-digit ka valid mobile number darj karein (6, 7, 8, 9 se start)!");
+      return alert("Kripya valid 10-digit mobile number darj karein!");
     }
     if (!/^\d{4}$/.test(authPin.trim())) {
       return alert("Kripya apna 4-digit BPIN enter karein!");
@@ -415,7 +421,7 @@ export default function App() {
     const user = allUsers.find(u => u.phone === cleanPhone);
 
     if (!user) {
-      return alert("Yeh number registered nahi hai! Kripya pehle 'Naya Khata Banayein (Register)' par tap karein.");
+      return alert("Yeh number registered nahi hai! Kripya pehle 'Naya Khata Banayein' par tap karein.");
     }
 
     if (user.bpin === authPin.trim()) {
@@ -455,6 +461,7 @@ export default function App() {
       return alert("Registered Naam match nahi hua! Kripya vahi naam dalein jo khata banate waqt dala tha.");
     }
 
+    // Update BPIN & Refresh Account
     allUsers[index].bpin = newBpin.trim();
     localStorage.setItem('bm_registered_users', JSON.stringify(allUsers));
     localStorage.setItem('bm_current_customer', JSON.stringify(allUsers[index]));
@@ -579,7 +586,60 @@ export default function App() {
     };
     reader.readAsDataURL(file);
   };
-    const getCheckoutItems = () => {
+    const getMinQty = (prod) => {
+    return Number(prod?.min_quantity || prod?.min_items || 1);
+  };
+
+  const handleAddToCart = (prod, sizeToUse = null) => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthOpen(true);
+      return;
+    }
+    const minQ = getMinQty(prod);
+    const finalSize = sizeToUse || selectedSize || 'Standard';
+    setCart(prev => {
+      const idx = prev.findIndex(item => item.id === prod.id && item.size === finalSize);
+      if (idx > -1) {
+        const copy = [...prev];
+        copy[idx].quantity += 1;
+        return copy;
+      }
+      return [...prev, { ...prod, size: finalSize, quantity: minQ }];
+    });
+    alert("Item Cart mein joda gaya!");
+  };
+
+  const handleInitiateBuyNow = (prod) => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthOpen(true);
+      return;
+    }
+    const minQ = getMinQty(prod);
+    setCheckoutProduct({ ...prod, quantity: minQ });
+    setSelectedSize(prod.sizes?.[0] || 'M');
+    setIsCheckoutOpen(true);
+  };
+
+  const updateCartQty = (id, size, change) => {
+    setCart(prev => {
+      return prev.map(item => {
+        if (item.id === id && item.size === size) {
+          const minQ = getMinQty(item);
+          const newQty = item.quantity + change;
+          if (newQty < minQ && change < 0) {
+            alert("Aapko kam se kam minimum requirement jitna order karna hoga!");
+            return null;
+          }
+          return newQty > 0 ? { ...item, quantity: newQty } : null;
+        }
+        return item;
+      }).filter(Boolean);
+    });
+  };
+
+  const getCheckoutItems = () => {
     if (checkoutProduct) {
       return [{ ...checkoutProduct, quantity: checkoutProduct.quantity || getMinQty(checkoutProduct), size: selectedSize || 'Standard' }];
     }
@@ -593,10 +653,9 @@ export default function App() {
     return acc + fee;
   }, 0);
 
-  const primaryUpiId = getCheckoutItems()[0]?.upi_id || '9204184716@upi';
+  const primaryUpiId = getCheckoutItems()[0]?.upi_id || 'Barijanmart@upi';
   const upiPayUrl = "upi://pay?pa=" + primaryUpiId + "&pn=BarijanMart&am=" + totalDeliveryFee + "&cu=INR";
-
-  const handleExecuteOrder = async () => {
+    const handleExecuteOrder = async () => {
     if (!currentUser) {
       setAuthMode('login');
       setIsAuthOpen(true);
@@ -683,6 +742,9 @@ export default function App() {
     if (!actionReason.trim()) {
       return alert("Kripya poora karan batayein!");
     }
+    if (!actionImage) {
+      return alert("Kripya product ki photo upload karein!");
+    }
     if (actionType === 'return') {
       if (refundMethod === 'upi' && !refundUpi.trim()) {
         return alert("Kripya apna UPI Id ya Number darj karein!");
@@ -696,6 +758,7 @@ export default function App() {
     const returnPayload = {
       type: actionType === 'return' ? 'वापस करना है' : 'बदलना है',
       reason: actionReason.trim(),
+      product_photo: actionImage,
       refund_method: actionType === 'return' ? refundMethod : null,
       refund_details: actionType === 'return' ? (refundMethod === 'upi' ? { upi: refundUpi.trim() } : bankDetails) : null,
       requested_at: new Date().toISOString()
@@ -719,9 +782,10 @@ export default function App() {
         return_info: returnPayload
       } : o));
 
-      alert("Request bhej di gayi hai! BMart Admin iski janch karega.");
+      alert("Request safalta se bhej di gayi hai! BMart Admin iski janch karega.");
       setSelectedOrderForAction(null);
       setActionReason('');
+      setActionImage(null);
       setRefundUpi('');
       setBankDetails({ accountNo: '', ifsc: '', holderName: '' });
     } catch (err) {
@@ -801,19 +865,13 @@ export default function App() {
           </div>
         </div>
       )}
-            {/* Main Header with Universal Back Button */}
+            {/* Main Sticky Header (Always Clean Menu Button, No Back Button) */}
       <header className="bg-gradient-to-r from-red-700 via-rose-700 to-red-800 text-white p-4 sticky top-0 z-30 shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            {screenStack.length > 1 ? (
-              <button onClick={goBack} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-xl active:scale-95 transition">
-                <ArrowLeft size={19} />
-              </button>
-            ) : (
-              <button onClick={() => setIsDrawerOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl active:scale-95 transition">
-                <Menu size={20} />
-              </button>
-            )}
+            <button onClick={() => setIsDrawerOpen(true)} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl active:scale-95 transition">
+              <Menu size={20} />
+            </button>
             <div>
               <h1 className="text-lg font-black tracking-tight leading-none">Barijan Mart</h1>
               <p className="text-[10px] text-red-100 font-medium mt-0.5 truncate max-w-[150px]">
@@ -846,13 +904,14 @@ export default function App() {
       </header>
 
       <main className="p-3.5 flex-1">
+        {/* Product Detail Screen */}
         {activeTab === 'product-detail' && selectedProduct && (
           <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200">
             <button 
-              onClick={goBack} 
+              onClick={() => navigateTo('home')} 
               className="mb-3 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1"
             >
-              <ArrowLeft size={14} /> Back
+              <ArrowLeft size={14} /> Back to Products
             </button>
 
             <div className="w-full bg-slate-100 rounded-2xl overflow-hidden flex items-center justify-center border border-slate-200">
@@ -926,7 +985,8 @@ export default function App() {
             </div>
           </div>
         )}
-                {activeTab === 'home' && (
+                {/* Home Screen */}
+        {activeTab === 'home' && (
           <div>
             <div className="mb-3 p-2.5 bg-gradient-to-r from-red-600 to-rose-600 rounded-2xl text-white flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-2">
@@ -1003,8 +1063,7 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* Cart Screen */}
+                {/* Cart Screen */}
         {activeTab === 'cart' && (
           <div>
             <h2 className="text-sm font-black text-slate-900 mb-3 flex items-center gap-1.5"><ShoppingCart size={16} className="text-red-700" /> Aapka Cart ({cart.length})</h2>
@@ -1151,8 +1210,7 @@ export default function App() {
             )}
           </div>
         )}
-
-        {/* Profile Tab */}
+                {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col gap-4">
             <h2 className="text-sm font-black text-slate-900">User Profile</h2>
@@ -1288,7 +1346,8 @@ export default function App() {
           </div>
         )}
       </main>
-            {/* Checkout Screen with Back-Warning Protection */}
+
+      {/* Checkout Screen with Back-Warning Protection */}
       {isCheckoutOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 max-h-[92vh] overflow-y-auto shadow-2xl">
@@ -1409,8 +1468,7 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* Return & Replacement Modal */}
+            {/* Return & Replacement Modal with Photo Upload */}
       {selectedOrderForAction && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
           <form onSubmit={handleActionSubmit} className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl flex flex-col gap-3 max-h-[90vh] overflow-y-auto">
@@ -1448,6 +1506,23 @@ export default function App() {
                 onChange={e => setActionReason(e.target.value)}
                 className="w-full px-3 py-2 text-xs border rounded-xl bg-slate-50"
               />
+            </div>
+
+            {/* Product Photo Upload Box */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                Product ki Photo Upload Karein (Damage / Wrong Item) *
+              </label>
+              <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-red-300 bg-red-50/50 rounded-xl cursor-pointer hover:bg-red-50 transition">
+                <Camera size={20} className="text-red-700 mb-1" />
+                <span className="text-[11px] font-bold text-red-700">
+                  {actionImage ? "✓ Photo Attach Ho Gayi (Badalne ke liye tap karein)" : "Photo Khinchein ya Gallery Se Chunein"}
+                </span>
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleReturnPhotoUpload} />
+              </label>
+              {actionImage && (
+                <img src={actionImage} alt="Return Item Preview" className="w-20 h-20 object-cover rounded-xl mt-2 border border-slate-200 mx-auto" />
+              )}
             </div>
 
             {actionType === 'return' && (
@@ -1519,7 +1594,8 @@ export default function App() {
           </form>
         </div>
       )}
-            {/* 4-Digit BPIN Login, Register & Forgot Password Modal */}
+
+      {/* 4-Digit BPIN Login, Register & Forgot Password Modal */}
       {isAuthOpen && (
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-xs rounded-3xl p-5 shadow-2xl flex flex-col gap-3">
@@ -1542,7 +1618,8 @@ export default function App() {
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-[10px] font-bold text-slate-600">Mobile Number (6,7,8,9 se start) *</label>
+                {/* Clean label without showing 6,7,8,9 rule */}
+                <label className="text-[10px] font-bold text-slate-600">Mobile Number *</label>
                 {isPhoneLocked && (
                   <button type="button" onClick={() => setIsPhoneLocked(false)} className="text-[9px] text-red-600 font-bold underline">
                     Edit Number
@@ -1552,7 +1629,7 @@ export default function App() {
               <input 
                 type="tel" 
                 maxLength={10}
-                placeholder="10-Digit Mobile Number *" 
+                placeholder="10-Digit Mobile Number" 
                 value={authPhone} 
                 onClick={handlePhoneBoxClick}
                 readOnly={isPhoneLocked}
@@ -1561,7 +1638,7 @@ export default function App() {
               />
               {isPhoneLocked && (
                 <span className="text-[9px] text-emerald-700 font-bold block mt-0.5">
-                  ✓ SIM number locked (Fake number blocked)
+                  ✓ SIM number locked
                 </span>
               )}
             </div>
@@ -1710,18 +1787,19 @@ export default function App() {
       </nav>
     </div>
   );
-                }
-                  
-                    
+                      }
+              
                         
-            
-                    
+              
+                                                              
+                        
+                      
       
       
+                               
       
+        
   
+
     
-  
-            
-  
   
