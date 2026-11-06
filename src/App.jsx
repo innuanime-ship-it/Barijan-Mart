@@ -471,7 +471,7 @@ export default function App() {
     setNewBpin('');
     setAuthPin('');
     setIsPhoneLocked(false);
-    alert("Aapka naya BPIN safalta se set ho gaya aur account login ho gaya!");
+    alert("Aapka naya BPIN set ho gaya aur account login ho gaya!");
   };
 
   const handleSaveProfileAddress = (e) => {
